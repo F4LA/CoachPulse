@@ -1,26 +1,20 @@
 /**
  * Coach Pulse Dashboard — State Builder
  *
- * Iterates over the active roster, calls PathwayEngine.calculateClientState
- * for each client TWICE:
- *   - once at `meetingDate` (this Thursday)         → currentState
- *   - once at `meetingDate - 7 days` (last Thursday) → previousState
+ * For S1 (% New Red Flags) we need to know two things per client:
+ *   - Current state at end of just-closed coaching week (Wed 23:59 ET)
+ *   - State at end of the week BEFORE that
  *
- * Both runs are needed because S1 (% New Red Flags) requires comparing
- * a client's color at this week vs last week to detect transitions.
+ * If previous !== Red and current === Red, the client is a "new Red" this week.
  *
- * Coaches not in CFG.COACHES are filtered out (excludes Bernardo, Joey,
- * blanks, and any other entries in col J that aren't an active coach).
+ * We build TWO state arrays. Both are filtered to only include clients whose
+ * roster.coach is in CONFIG.COACHES (excludes Bernardo, Joey, blank, etc.).
  *
- * Output:
- *   [
- *     {
- *       clientName, coach,
- *       currentState:  { color, dominantPathway, pathwayStates, blackFlags, ... },
- *       previousState: { color, dominantPathway, pathwayStates, blackFlags, ... }
- *     },
- *     ...
- *   ]
+ * Output shape:
+ *   {
+ *     current:  [{ client, coach, color, activePathway, blackFlags, ...engineResult }, ...],
+ *     previous: [...same shape, but one week earlier]
+ *   }
  */
 (function (root) {
   "use strict";
@@ -30,73 +24,61 @@
   if (!root.PathwayEngine) throw new Error("state-builder: PathwayEngine not loaded");
 
   function isValidCoach(coachName) {
+    if (!coachName) return false;
     return CFG.COACHES.indexOf(coachName) !== -1;
   }
 
-  function buildAll(data, meetingDate) {
-    var roster = data.roster || [];
-    var formResponses = data.formResponses || [];
-    var hcActions = data.hcActions || [];
-
-    var lookback = CFG.ENGINE_LOOKBACK_WEEKS || 16;
-
-    // Previous Thursday = meeting date - 7 days
-    var previousDate = new Date(meetingDate.getTime());
-    previousDate.setDate(previousDate.getDate() - 7);
-
-    var results = [];
-
+  function buildOneRun(roster, formResponses, hcActions, currentDate) {
+    var states = [];
     for (var i = 0; i < roster.length; i++) {
       var entry = roster[i];
-
-      // Filter: only the 4 active coaches
       if (!isValidCoach(entry.coach)) continue;
-
       try {
-        var currentState = root.PathwayEngine.calculateClientState(
+        var state = root.PathwayEngine.calculateClientState(
           entry.client,
           formResponses,
           hcActions,
-          { lookbackWeeks: lookback, currentDate: meetingDate }
+          {
+            lookbackWeeks: CFG.ENGINE_LOOKBACK_WEEKS,
+            currentDate:   currentDate
+          }
         );
-
-        var previousState = root.PathwayEngine.calculateClientState(
-          entry.client,
-          formResponses,
-          hcActions,
-          { lookbackWeeks: lookback, currentDate: previousDate }
-        );
-
-        results.push({
-          clientName:    entry.client,
-          coach:         entry.coach,
-          currentState:  currentState,
-          previousState: previousState
-        });
+        state.coach  = entry.coach;
+        state.client = entry.client;
+        state.email  = entry.email;
+        states.push(state);
       } catch (err) {
         if (root.console && root.console.warn) {
-          root.console.warn("state-builder: skipped " + entry.client + " — " + err.message);
+          root.console.warn("[state-builder] skipped " + entry.client + " — " + err.message);
         }
       }
     }
-
-    return results;
+    return states;
   }
 
-  function groupByCoach(states) {
-    var out = {};
-    for (var i = 0; i < CFG.COACHES.length; i++) {
-      out[CFG.COACHES[i]] = [];
-    }
-    for (var j = 0; j < states.length; j++) {
-      var s = states[j];
-      if (out[s.coach]) out[s.coach].push(s);
-    }
-    return out;
+  /**
+   * @param {Object} data        — output of SheetsReader.loadAll()
+   * @param {Date}   meetingDate — Thursday meeting day (current or historical)
+   * @returns {{current: Array, previous: Array}}
+   */
+  function build(data, meetingDate) {
+    var current = buildOneRun(
+      data.roster,
+      data.formResponses,
+      data.hcActions,
+      meetingDate
+    );
+
+    var prevDate = new Date(meetingDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    var previous = buildOneRun(
+      data.roster,
+      data.formResponses,
+      data.hcActions,
+      prevDate
+    );
+
+    return { current: current, previous: previous };
   }
 
-  root.StateBuilder = {
-    buildAll: buildAll,
-    groupByCoach: groupByCoach
-  };
+  root.StateBuilder = { build: build, isValidCoach: isValidCoach };
 })(typeof window !== "undefined" ? window : this);
