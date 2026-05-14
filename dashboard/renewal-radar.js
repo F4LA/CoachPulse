@@ -1,149 +1,109 @@
 /**
  * Coach Pulse Dashboard — Renewal Radar (CD: Renewals Next 2 Weeks)
- *
- * Builds the list of clients with End Date in the next 14 calendar days,
- * grouped by coach, with HC-assigned status from Manual Inputs Tab 2.
- *
- * Window: Thursday 00:00 ET (meeting day) → Wednesday 23:59 ET 14 days later.
- *
- * Color (per coach):
- *   Green: all clients in Green statuses
- *   Red:   any single client in Red status
- *   Gray:  any client unset
  */
 (function (root) {
   "use strict";
 
   var CFG = root.CoachPulseConfig;
-  if (!CFG) throw new Error("renewal-radar: CoachPulseConfig not loaded");
+  var helpers = root.Scorecard && root.Scorecard.helpers;
+  if (!CFG)     throw new Error("renewal-radar: CoachPulseConfig not loaded");
+  if (!helpers) throw new Error("renewal-radar: Scorecard helpers not loaded");
 
-  function parseDate(s) {
-    if (!s) return null;
-    if (s instanceof Date) return s;
-    var d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  function formatYMD(date) {
-    var y = date.getFullYear();
-    var m = String(date.getMonth() + 1).padStart(2, "0");
-    var d = String(date.getDate()).padStart(2, "0");
-    return y + "-" + m + "-" + d;
-  }
-
-  function closingWedOfClosedWeek(meetingDate) {
-    var wed = new Date(meetingDate.getTime());
-    wed.setDate(wed.getDate() - 1);
-    return formatYMD(wed);
-  }
-
-  /**
-   * Returns a list of clients whose End Date falls within the next 14 days
-   * from meetingDate (Thursday 00:00 ET → Wednesday 23:59 ET +14d).
-   */
-  function clientsInWindow(coachName, masterSheet, meetingDate) {
-    var windowStart = new Date(meetingDate.getTime());
-    windowStart.setHours(0, 0, 0, 0);  // Thu 00:00 ET
-
-    var windowEnd = new Date(windowStart.getTime());
-    windowEnd.setDate(windowEnd.getDate() + 14);  // Wed 23:59 ET 14d later
-    windowEnd.setHours(23, 59, 59, 999);
-    // Note: windowEnd is actually the same calendar day as today+14, which
-    // is the Wednesday 14 days from today. Inclusive upper bound.
-
-    var out = [];
-    for (var i = 0; i < masterSheet.length; i++) {
-      var row = masterSheet[i];
-      if (row.coach !== coachName) continue;
-      var endDate = parseDate(row.newEndDate);
-      if (!endDate) continue;
-      if (endDate >= windowStart && endDate <= windowEnd) {
-        out.push({
-          clientName: (row.firstName + " " + row.lastName).trim(),
-          firstName:  row.firstName,
-          lastName:   row.lastName,
-          email:      row.email,
-          endDate:    row.newEndDate
-        });
-      }
-    }
-    return out;
-  }
-
-  /**
-   * Looks up the HC-assigned Status for a client from the Manual Inputs Tab 2.
-   * Matches by (week, coach, client name).
-   */
-  function lookupStatus(weekEndingWed, coachName, clientName, manualCD) {
-    var hit = manualCD.find(function (r) {
-      return r.weekEndingWed === weekEndingWed
-          && r.coach === coachName
-          && r.clientName === clientName;
-    });
-    return hit ? (hit.status || "") : "";
+  function getWindow(meetingDate) {
+    var start = new Date(meetingDate);
+    start.setHours(0, 0, 0, 0);
+    var end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000 - 1);
+    return { start: start, end: end };
   }
 
   function classifyStatus(status) {
     if (!status) return "unset";
-    if (CFG.CD_STATUSES.GREEN.indexOf(status) !== -1) return "green";
-    if (CFG.CD_STATUSES.RED.indexOf(status)   !== -1) return "red";
+    var s = String(status).trim();
+    if (CFG.CD_STATUSES.GREEN.indexOf(s) !== -1) return "green";
+    if (CFG.CD_STATUSES.RED.indexOf(s) !== -1)   return "red";
     return "unset";
   }
 
-  /**
-   * Per-coach color rule:
-   *   - any client with red-class status → red
-   *   - else any client unset            → neutral (gray)
-   *   - else all green                   → green
-   */
-  function rollupColor(items) {
-    var anyRed = false;
-    var anyUnset = false;
-    for (var i = 0; i < items.length; i++) {
-      var cls = items[i].statusClass;
-      if (cls === "red") anyRed = true;
-      if (cls === "unset") anyUnset = true;
+  function deriveCoachColor(clientList) {
+    if (clientList.length === 0) return "neutral";
+    var hasUnset = false, hasRed = false;
+    for (var i = 0; i < clientList.length; i++) {
+      var k = classifyStatus(clientList[i].status);
+      if (k === "red") hasRed = true;
+      else if (k === "unset") hasUnset = true;
     }
-    if (anyRed) return "red";
-    if (anyUnset) return "neutral";
+    if (hasRed) return "red";
+    if (hasUnset) return "neutral";
     return "green";
   }
 
-  function computeForCoach(coachName, masterSheet, manualCD, meetingDate) {
-    var weekEndingWed = closingWedOfClosedWeek(meetingDate);
-    var inWindow = clientsInWindow(coachName, masterSheet, meetingDate);
-
-    var items = inWindow.map(function (c) {
-      var status = lookupStatus(weekEndingWed, coachName, c.clientName, manualCD);
-      return {
-        clientName:  c.clientName,
-        endDate:     c.endDate,
-        status:      status,
-        statusClass: classifyStatus(status)
-      };
-    });
-
-    var color = items.length === 0 ? "neutral" : rollupColor(items);
-    var display = items.length === 0 ? "0 clients" :
-                  items.length + " client" + (items.length === 1 ? "" : "s");
-
-    return {
-      value:         items.length,
-      color:         color,
-      displayString: display,
-      breakdown: {
-        clients:       items,
-        weekEndingWed: weekEndingWed
+  function findStatus(manualCD, weekKey, coach, clientName) {
+    for (var i = 0; i < manualCD.length; i++) {
+      var r = manualCD[i];
+      if (r.weekEndingWed === weekKey && r.coach === coach && r.clientName === clientName) {
+        return r.status || "";
       }
-    };
+    }
+    return "";
+  }
+
+  function compute(data, meetingDate) {
+    var window = getWindow(meetingDate);
+    var closingWed = new Date(meetingDate.getTime() - 1 * 24 * 60 * 60 * 1000);
+    var weekKey =
+      closingWed.getFullYear() + "-" +
+      String(closingWed.getMonth() + 1).padStart(2, "0") + "-" +
+      String(closingWed.getDate()).padStart(2, "0");
+
+    var out = {};
+    for (var i = 0; i < CFG.COACHES.length; i++) out[CFG.COACHES[i]] = { clients: [] };
+
+    for (var j = 0; j < data.masterSheet.length; j++) {
+      var r = data.masterSheet[j];
+      if (!out[r.coach]) continue;
+      var end = helpers.parseDateLoose(r.newEndDate);
+      if (!end) continue;
+      if (end < window.start || end > window.end) continue;
+
+      var clientName = (r.firstName + " " + r.lastName).trim();
+      var status     = findStatus(data.manualCD, weekKey, r.coach, clientName);
+
+      out[r.coach].clients.push({
+        client:    clientName,
+        endDate:   r.newEndDate,
+        status:    status,
+        classification: classifyStatus(status)
+      });
+    }
+
+    var result = {};
+    for (var k = 0; k < CFG.COACHES.length; k++) {
+      var c = CFG.COACHES[k];
+      var list = out[c].clients;
+      var unsetCount = 0;
+      for (var m = 0; m < list.length; m++) {
+        if (classifyStatus(list[m].status) === "unset") unsetCount++;
+      }
+      result[c] = {
+        CD: {
+          value: list.length,
+          displayString: list.length === 0
+            ? "—"
+            : String(list.length),
+          subDisplay: list.length === 0
+            ? "no clients in window"
+            : (list.length === 1 ? "1 client" : list.length + " clients") +
+              (unsetCount > 0 ? " · " + unsetCount + " unset" : ""),
+          color: deriveCoachColor(list),
+          breakdown: list
+        }
+      };
+    }
+    return result;
   }
 
   root.RenewalRadar = {
-    computeForCoach: computeForCoach,
-    _internal: {
-      clientsInWindow: clientsInWindow,
-      classifyStatus:  classifyStatus,
-      rollupColor:     rollupColor
-    }
+    compute: compute,
+    helpers: { getWindow: getWindow, classifyStatus: classifyStatus }
   };
 })(typeof window !== "undefined" ? window : this);
