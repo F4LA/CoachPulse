@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coach Pulse — Strong Standard</title>
+
+  <!-- Fonts (matches FlagSystem) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    /* Phase 1 shell-only styles. Replaced in Phase 3 with full dashboard. */
+    .status {
+      padding: 10px 16px;
+      margin: 16px 32px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .status.loading { background: var(--steel-tint); color: var(--steel-700); }
+    .status.ok      { background: var(--green-bg);   color: var(--green); }
+    .status.error   { background: var(--red-bg);     color: var(--red); }
+
+    main#main { padding: 24px 32px 64px; max-width: var(--container); margin: 0 auto; }
+    .shell-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 28px;
+      box-shadow: var(--shadow);
+    }
+    .shell-card h2 {
+      font-family: var(--font-display);
+      letter-spacing: 0.05em;
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .shell-card h3 {
+      margin: 24px 0 8px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+    .shell-card .muted { color: var(--text-muted); font-size: 13px; }
+    .shell-card code {
+      background: var(--surface-2);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+    }
+    .simple-table {
+      width: 100%;
+      max-width: 360px;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .simple-table th, .simple-table td {
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .simple-table th {
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-mark">COACH PULSE</span>
+      <span class="brand-sub">Strong Standard</span>
+    </div>
+    <div class="top-bar-right">
+      <span class="brand-sub" id="phase-label">Phase 1 — Foundation</span>
+    </div>
+  </header>
+
+  <div id="status" class="status loading">Initializing…</div>
+
+  <main id="main">
+    <!-- Filled by app.js once data is loaded -->
+  </main>
+
+  <!-- Engine: imported from F4LA/FlagSystem via jsdelivr, pinned to commit 9b179bb -->
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/coaching-week.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/client-timeline.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/consecutive-evaluable.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/pathway-evaluators.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/color-deriver.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/pathway-engine.js"></script>
+
+  <!-- Dashboard modules -->
+  <script src="dashboard/config.js"></script>
+  <script src="dashboard/sheets-reader.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
