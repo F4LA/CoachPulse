@@ -1,8 +1,8 @@
 /**
  * Coach Pulse Dashboard — Config
  *
- * Sheet IDs, API key reference, coach roster, and threshold constants.
- * All values here are non-secret (API key restricted by HTTP referrer).
+ * Sheet IDs, API key reference, coach roster, thresholds, and metric metadata
+ * (names + descriptions + threshold legends for UI rendering).
  */
 (function (root) {
   "use strict";
@@ -10,13 +10,10 @@
   var CONFIG = {
     /* ---------- Data sources ---------- */
     SHEETS: {
-      // Reused from Flag System
       ROSTER:         { id: "1VxxqmOVuXffLOpPvMWnSUHhyhkjIajtBeBoSV3xk1fc", tab: "Roster" },
       FORM_RESPONSES: { id: "1ugM0iOCwdaQpyDVPuJQfKRhu72NQrtC-hEjJ7PkGHoA", tab: "Form Responses 1" },
       HC_ACTIONS:     { id: "1TmlmzNPi-BtLy1C4sizqJmvLFHAxyH6Glb9mWP3Vv64", tab: "HC Actions" },
-      // Renewal data
       MASTER_SHEET:   { id: "1ctM6K8hQfh73bi7f-MtXkqW3BaPxU73NZf8xPJQUEOc", tab: "Client Mastersheet" },
-      // Manual inputs persistence (created in Chat A1.5)
       MANUAL_INPUTS:  { id: "1jHCwgiOy2MAvaPYtYDkErag3kdCy4jXIAN7sTqhX9BQ", tabs: {
         CB_CC:     "CB_CC_Inputs",
         CD_STATUS: "CD_Statuses"
@@ -24,17 +21,12 @@
     },
 
     /* ---------- Sheets API ---------- */
-    // Same GCP project as Flag System (plucky-zodiac-491515-j6).
-    // Restricted by HTTP referrer to https://f4la.github.io/* — safe to commit.
     API_KEY: "AIzaSyCbpE8CmLKpfmbMPLXkEmWe-5zEx53XyIg",
 
     /* ---------- Coaches ---------- */
-    // Names match exactly what appears in Master Sheet column J.
-    // Anything in col J not in this list is ignored (e.g., Bernardo, Joey).
     COACHES: ["Brent", "Ceci", "Miguel", "Jackie"],
 
-    /* ---------- Master Sheet column indices ---------- */
-    // 0-indexed positions for the columns we read in MASTER_SHEET.
+    /* ---------- Master Sheet columns (0-indexed) ---------- */
     MASTER_COLS: {
       FIRST_NAME:    0,  // A
       LAST_NAME:     1,  // B
@@ -45,26 +37,19 @@
     },
 
     /* ---------- Engine pinning ---------- */
-    // 7-char short SHA of F4LA/FlagSystem commit AFTER the Thu-Wed engine change.
-    // Set in Chat A1.5. Bump per Engine Change Protocol.
     ENGINE_HASH: "9b179bb",
 
-    /* ---------- Scorecard thresholds (per Coaching OS v1.1) ---------- */
+    /* ---------- Scorecard thresholds ---------- */
     THRESHOLDS: {
-      // S1 — % New Red Flags
-      S1: { green: 6, yellow: 10 },        // <=6 green, 7-10 yellow, >10 red
-      // S2 — % Yellow/Red Cumulative
-      S2: { green: 15, yellow: 20 },       // <=15 green, 16-20 yellow, >20 red
-      // S3 — informational, no thresholds
-      // S4 — informational (changed from TDD v1.2: muestra muy pequeña por coach por semana)
-      // CA — Form Submission Rate
-      CA: { green: 90, yellow: 80 }        // >=90 green, 80-89 yellow, <80 red
-      // CB / CC / CD — categorical, handled in their modules
+      // S1 — New Red Flags: lower is better
+      newRed:     { green: 6, yellow: 10 },
+      // S2 — Yellow/Red Cumulative: lower is better
+      yrCum:      { green: 15, yellow: 20 },
+      // Form Submission Rate: higher is better. 100 green, 95-99 yellow, <95 red.
+      formSub:    { green: 100, yellow: 95 }
     },
 
-    /* ---------- Behavior: defaults when no manual entry exists ---------- */
-    // Decision: if HC has not entered CB/CC for the week, tile is neutral/gray "—".
-    // No automatic Red default. Same for CC (no Pending/Missed inference from date).
+    /* ---------- Display defaults ---------- */
     MANUAL_UNSET_DISPLAY: "—",
 
     /* ---------- CD status taxonomy ---------- */
@@ -73,12 +58,68 @@
       RED:   ["No Decision - No Call Scheduled", "Did Not Renew - No Call Scheduled"]
     },
 
+    /* ---------- Metric metadata (used by renderer for UI labels) ---------- */
+    METRICS: {
+      S1: {
+        title:       "New Red Flags",
+        description: "% of clients that crossed into Red this week",
+        legend:      "Green ≤6%  ·  Yellow 7-10%  ·  Red >10%",
+        section:     "scorecard"
+      },
+      S2: {
+        title:       "Yellow/Red Cumulative",
+        description: "% of roster currently in Yellow or Red",
+        legend:      "Green ≤15%  ·  Yellow 16-20%  ·  Red >20%",
+        section:     "scorecard"
+      },
+      S3: {
+        title:       "Black-Flagged",
+        description: "% of clients with active Black badge",
+        legend:      "Informational",
+        section:     "scorecard"
+      },
+      S4: {
+        title:       "Renewals Last Week",
+        description: "Clients whose contract ended last week and renewed",
+        legend:      "Informational",
+        section:     "scorecard"
+      },
+      CA: {
+        title:       "Form Submission Rate",
+        description: "% of total clients for whom the Minimum Standards form was filled in this week",
+        legend:      "Green 100%  ·  Yellow 95-99%  ·  Red <95%",
+        section:     "behaviors"
+      },
+      CB: {
+        title:       "Community Post",
+        description: "Coach published at least 1 post in Everfit community this week",
+        legend:      "Green = Yes  ·  Red = No",
+        section:     "behaviors"
+      },
+      CC: {
+        title:       "Client Win Shoutout",
+        description: "Coach posted or scheduled a win shoutout this month",
+        legend:      "Green = Done  ·  Yellow = Pending  ·  Red = Missed",
+        section:     "behaviors"
+      },
+      CD: {
+        title:       "Renewals Next 2 Weeks",
+        description: "Clients with contract ending in the next 14 days",
+        legend:      "Green = all on track  ·  Red = any at risk  ·  Gray = pending status",
+        section:     "behaviors"
+      }
+    },
+
+    /* ---------- Order of tiles within sections ---------- */
+    METRIC_ORDER: {
+      scorecard: ["S1", "S2", "S3", "S4"],
+      behaviors: ["CA", "CB", "CC", "CD"]
+    },
+
     /* ---------- Misc ---------- */
     HISTORICAL_WEEKS: 8,
     ENGINE_LOOKBACK_WEEKS: 16,
-
-    // Slack channel for Wednesday Renewal Radar
-    SLACK_CHANNEL_RENEWAL: "C095QSAR8M6"  // #retention-updates
+    SLACK_CHANNEL_RENEWAL: "C095QSAR8M6"
   };
 
   root.CoachPulseConfig = CONFIG;
