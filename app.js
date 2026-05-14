@@ -1,202 +1,224 @@
-/**
- * Coach Pulse Dashboard — App
- *
- * Phase 2 scope:
- *   - Load all 6 sheet sources in parallel.
- *   - Run engine per client (this Thursday + last Thursday).
- *   - Compute S1-S4, CA, CB, CC, CD per coach.
- *   - Render compact validation table per coach.
- *   - Expose state on window for DevTools inspection.
- *
- * Phase 3 will replace the validation table with the real per-coach tab UI.
- */
-(function (root) {
-  "use strict";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coach Pulse — Strong Standard</title>
 
-  var CFG = root.CoachPulseConfig;
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="icon" href="data:," />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
 
-  /* ---------- date helpers ---------- */
+  <link rel="stylesheet" href="styles.css" />
 
-  /**
-   * Returns the Date representing "this Thursday" — the Coach Pulse meeting
-   * day. If today IS Thursday, returns today (at 09:30 local for clarity).
-   * If today is any other day, returns the upcoming Thursday.
-   *
-   * This date is what gets passed to the engine as `currentDate`. The engine
-   * uses it to identify the just-closed Coaching Week (Wed 23:59 ET before it).
-   */
-  function getMeetingDate(now) {
-    now = now || new Date();
-    var d = new Date(now.getTime());
-    d.setHours(9, 30, 0, 0);
-    var dayOfWeek = d.getDay();  // 0=Sun, 4=Thu
-    if (dayOfWeek === 4) {
-      return d;  // It's Thursday already.
+  <style>
+    /* ---------- Status banner ---------- */
+    .status {
+      padding: 10px 16px;
+      margin: 16px 32px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
     }
-    // Next Thursday
-    var daysUntilThu = (4 - dayOfWeek + 7) % 7;
-    if (daysUntilThu === 0) daysUntilThu = 7;
-    d.setDate(d.getDate() + daysUntilThu);
-    return d;
-  }
+    .status.loading { background: var(--steel-tint); color: var(--steel-700); }
+    .status.ok      { background: var(--green-bg);   color: var(--green); }
+    .status.error   { background: var(--red-bg);     color: var(--red); }
 
-  /* ---------- UI ---------- */
+    main#main { padding: 20px 32px 64px; max-width: var(--container); margin: 0 auto; }
 
-  function showStatus(msg, kind) {
-    var el = document.getElementById("status");
-    if (!el) return;
-    el.className = "status " + (kind || "");
-    el.textContent = msg;
-  }
-
-  function confirmEngineLoaded() {
-    var required = [
-      "CoachingWeek",
-      "ClientTimeline",
-      "ConsecutiveEvaluable",
-      "PathwayEvaluators",
-      "ColorDeriver",
-      "PathwayEngine"
-    ];
-    var missing = [];
-    for (var i = 0; i < required.length; i++) {
-      if (!root[required[i]]) missing.push(required[i]);
-    }
-    if (missing.length) {
-      throw new Error("Engine not fully loaded. Missing: " + missing.join(", "));
-    }
-  }
-
-  function colorBadge(color, text) {
-    var bg = {
-      green:   "var(--green-bg)",
-      yellow:  "var(--yellow-bg)",
-      red:     "var(--red-bg)",
-      neutral: "var(--surface-2)"
-    }[color] || "var(--surface-2)";
-    var fg = {
-      green:   "var(--green)",
-      yellow:  "var(--yellow)",
-      red:     "var(--red)",
-      neutral: "var(--text-muted)"
-    }[color] || "var(--text-muted)";
-    return "<span style=\"background:" + bg + ";color:" + fg +
-           ";padding:3px 8px;border-radius:4px;font-weight:600;font-size:12px;" +
-           "display:inline-block;min-width:48px;text-align:center\">" + text + "</span>";
-  }
-
-  function renderResults(metricsByCoach, meetingDate) {
-    var rows = "";
-    CFG.COACHES.forEach(function (coachName) {
-      var m = metricsByCoach[coachName];
-      if (!m) return;
-      rows +=
-        "<tr>" +
-          "<td><strong>" + coachName + "</strong></td>" +
-          "<td>" + m.activeClients + "</td>" +
-          "<td>" + colorBadge(m.S1.color, m.S1.displayString) + "</td>" +
-          "<td>" + colorBadge(m.S2.color, m.S2.displayString) + "</td>" +
-          "<td>" + colorBadge(m.S3.color, m.S3.displayString) + "</td>" +
-          "<td>" + colorBadge(m.S4.color, m.S4.displayString) + "</td>" +
-          "<td>" + colorBadge(m.CA.color, m.CA.displayString) + "</td>" +
-          "<td>" + colorBadge(m.CB.color, m.CB.displayString) + "</td>" +
-          "<td>" + colorBadge(m.CC.color, m.CC.displayString) + "</td>" +
-          "<td>" + colorBadge(m.CD.color, m.CD.displayString) + "</td>" +
-        "</tr>";
-    });
-
-    var thursStr = meetingDate.toDateString();
-
-    var html =
-      "<div class=\"shell-card\">" +
-        "<h2>Phase 2 — Calculations</h2>" +
-        "<p class=\"muted\">Meeting date used for engine: <code>" + thursStr + "</code>. " +
-        "Closed coaching week is the just-ended Thu→Wed before it.</p>" +
-        "<table class=\"metrics-table\">" +
-          "<thead><tr>" +
-            "<th>Coach</th>" +
-            "<th>Active</th>" +
-            "<th>S1<br><small>New Red</small></th>" +
-            "<th>S2<br><small>Y/R Cum</small></th>" +
-            "<th>S3<br><small>Black</small></th>" +
-            "<th>S4<br><small>Renewals LW</small></th>" +
-            "<th>CA<br><small>Submit %</small></th>" +
-            "<th>CB<br><small>Community</small></th>" +
-            "<th>CC<br><small>Shoutout</small></th>" +
-            "<th>CD<br><small>Next 2 wks</small></th>" +
-          "</tr></thead>" +
-          "<tbody>" + rows + "</tbody>" +
-        "</table>" +
-        "<p class=\"muted\" style=\"margin-top:16px\">" +
-          "Open DevTools → Console. Inspect <code>window.__cpData</code> (raw sheets), " +
-          "<code>window.__cpStates</code> (per-client engine output), and " +
-          "<code>window.__cpMetrics</code> (computed per-coach metrics).</p>" +
-      "</div>";
-
-    document.getElementById("main").innerHTML = html;
-  }
-
-  /* ---------- main pipeline ---------- */
-
-  function init() {
-    showStatus("Loading coaching data…", "loading");
-
-    try {
-      confirmEngineLoaded();
-    } catch (err) {
-      showStatus("Engine load failure: " + err.message, "error");
-      console.error(err);
-      return;
+    /* ---------- Meeting meta line ---------- */
+    .meeting-meta {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 16px;
     }
 
-    var meetingDate = getMeetingDate();
-    console.log("[CoachPulse] Meeting date:", meetingDate.toString());
+    /* ---------- Tab strip ---------- */
+    #tab-container {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding: 0 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .tab-strip {
+      display: flex;
+      gap: 4px;
+    }
+    .tab {
+      appearance: none;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 14px 22px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: color 120ms ease, border-color 120ms ease;
+    }
+    .tab:hover { color: var(--text); }
+    .tab-active {
+      color: var(--text);
+      border-bottom-color: var(--navy-900);
+    }
+    .tab-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .tab-dot-red    { background: var(--red); }
+    .tab-dot-yellow { background: var(--yellow); }
 
-    root.SheetsReader.loadAll()
-      .then(function (data) {
-        root.__cpData = data;
-        console.log("[CoachPulse] All data loaded:", data);
+    /* ---------- Coach header ---------- */
+    .coach-header {
+      margin: 24px 0 8px;
+    }
+    .coach-name {
+      font-family: var(--font-display);
+      font-size: 36px;
+      letter-spacing: 0.04em;
+      margin: 0;
+      color: var(--text);
+    }
 
-        showStatus("Computing engine state for active clients…", "loading");
+    /* ---------- Sections ---------- */
+    .metric-section {
+      margin-top: 28px;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin: 0 0 12px;
+    }
 
-        // 1. Run engine per client (this Thursday + last Thursday)
-        var states = root.StateBuilder.buildAll(data, meetingDate);
-        root.__cpStates = states;
-        console.log("[CoachPulse] Engine states (" + states.length + " clients):", states);
+    /* ---------- Tile grid ---------- */
+    .tile-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 1100px) {
+      .tile-grid { grid-template-columns: repeat(2, 1fr); }
+    }
 
-        // 2. Group by coach
-        var grouped = root.StateBuilder.groupByCoach(states);
-        root.__cpStatesByCoach = grouped;
+    /* ---------- Tile ---------- */
+    .tile {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      min-height: 170px;
+      box-shadow: var(--shadow-sm);
+    }
+    .tile-green   { border-left-color: var(--green); }
+    .tile-yellow  { border-left-color: var(--yellow); }
+    .tile-red     { border-left-color: var(--red); }
+    .tile-neutral { border-left-color: var(--border-strong); }
 
-        // 3. Compute metrics per coach
-        var metrics = {};
-        CFG.COACHES.forEach(function (coachName) {
-          var coachStates = grouped[coachName] || [];
-          var sc = root.Scorecard.computeForCoach(coachName, coachStates, data.masterSheet, meetingDate);
-          var cl = root.Checklist.computeForCoach(coachName, coachStates, data, meetingDate);
-          var cd = root.RenewalRadar.computeForCoach(coachName, data.masterSheet, data.manualCD, meetingDate);
-          metrics[coachName] = {
-            activeClients: coachStates.length,
-            S1: sc.S1, S2: sc.S2, S3: sc.S3, S4: sc.S4,
-            CA: cl.CA, CB: cl.CB, CC: cl.CC,
-            CD: cd
-          };
-        });
-        root.__cpMetrics = metrics;
-        console.log("[CoachPulse] Computed metrics:", metrics);
+    .tile-header {
+      margin-bottom: 12px;
+    }
+    .tile-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .tile-description {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
 
-        showStatus("Ready.", "ok");
-        renderResults(metrics, meetingDate);
-      })
-      .catch(function (err) {
-        showStatus("Load/compute failed: " + err.message, "error");
-        console.error("[CoachPulse] Error:", err);
-      });
-  }
+    .tile-value-block {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 4px 0;
+    }
+    .tile-value {
+      font-family: var(--font-display);
+      font-size: 36px;
+      letter-spacing: 0.02em;
+      line-height: 1;
+      color: var(--text);
+    }
+    .tile-green  .tile-value { color: var(--green); }
+    .tile-yellow .tile-value { color: var(--yellow); }
+    .tile-red    .tile-value { color: var(--red); }
+    .tile-sub {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 4px;
+      font-weight: 500;
+    }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
-})(typeof window !== "undefined" ? window : this);
+    .tile-legend {
+      font-size: 10px;
+      color: var(--text-faint);
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+      margin-top: 8px;
+      letter-spacing: 0.02em;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-mark">COACH PULSE</span>
+      <span class="brand-sub">Strong Standard</span>
+    </div>
+    <div class="top-bar-right">
+      <span class="brand-sub">Thursday Meeting Prep</span>
+    </div>
+  </header>
+
+  <div id="status" class="status loading">Initializing…</div>
+
+  <div id="tab-container"></div>
+
+  <main id="main"></main>
+
+  <!-- Engine: imported from F4LA/FlagSystem via jsdelivr, pinned to commit 9b179bb -->
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/coaching-week.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/client-timeline.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/consecutive-evaluable.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/pathway-evaluators.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/color-deriver.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/F4LA/FlagSystem@9b179bb/engine/pathway-engine.js"></script>
+
+  <!-- Dashboard modules -->
+  <script src="dashboard/config.js"></script>
+  <script src="dashboard/sheets-reader.js"></script>
+  <script src="dashboard/state-builder.js"></script>
+  <script src="dashboard/scorecard.js"></script>
+  <script src="dashboard/checklist.js"></script>
+  <script src="dashboard/renewal-radar.js"></script>
+  <script src="dashboard/renderer.js"></script>
+  <script src="dashboard/tabs.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
