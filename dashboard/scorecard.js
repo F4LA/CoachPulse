@@ -1,14 +1,5 @@
 /**
- * Coach Pulse Dashboard — Scorecard (S1-S4)
- *
- * Per-coach metrics computed from engine state (states grouped by coach)
- * and Master Sheet (for S4).
- *
- * Each metric returns:
- *   { value, color, displayString, breakdown }
- *
- * `color` ∈ "green" | "yellow" | "red" | "neutral"
- * `breakdown` is the data for the side-panel client list (used in Phase 4).
+ * Coach Pulse Dashboard — Scorecard (S1–S4)
  */
 (function (root) {
   "use strict";
@@ -16,229 +7,226 @@
   var CFG = root.CoachPulseConfig;
   if (!CFG) throw new Error("scorecard: CoachPulseConfig not loaded");
 
-  /* ---------- helpers ---------- */
+  /* ---------- Color helpers ---------- */
 
-  function pct(num, den) {
-    if (!den) return 0;
-    return (num / den) * 100;
-  }
-
-  function round1(n) {
-    return Math.round(n * 10) / 10;
-  }
-
-  function colorForS1(value) {
-    var t = CFG.THRESHOLDS.S1;
-    if (value <= t.green) return "green";
-    if (value <= t.yellow) return "yellow";
+  function colorForPercentLowerBetter(pct, thresholds) {
+    // lower is better. green if <=green, yellow if <=yellow, else red
+    if (pct <= thresholds.green) return "green";
+    if (pct <= thresholds.yellow) return "yellow";
     return "red";
   }
 
-  function colorForS2(value) {
-    var t = CFG.THRESHOLDS.S2;
-    if (value <= t.green) return "green";
-    if (value <= t.yellow) return "yellow";
+  function colorForPercentHigherBetter(pct, thresholds) {
+    // higher is better. green if >=green, yellow if >=yellow, else red
+    if (pct >= thresholds.green) return "green";
+    if (pct >= thresholds.yellow) return "yellow";
     return "red";
   }
 
-  function parseDate(s) {
-    if (!s) return null;
-    if (s instanceof Date) return s;
-    var d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
+  function pct(num, denom) {
+    if (denom === 0) return 0;
+    return (num / denom) * 100;
   }
 
-  /* ---------- S1: % New Red Flags ---------- */
-  // Clients whose color flipped Red this week (previous != Red, current == Red).
+  function fmtPct(v) {
+    if (v === Math.floor(v)) return v + "%";
+    return v.toFixed(1) + "%";
+  }
 
-  function computeS1(coachStates) {
+  function parseDateLoose(v) {
+    if (!v) return null;
+    if (v instanceof Date) return v;
+    var d = new Date(v);
+    if (!isNaN(d.getTime())) return d;
+    var parts = String(v).split("/");
+    if (parts.length === 3) {
+      var m = parseInt(parts[0], 10);
+      var day = parseInt(parts[1], 10);
+      var y = parseInt(parts[2], 10);
+      if (!isNaN(m) && !isNaN(day) && !isNaN(y)) {
+        return new Date(y, m - 1, day);
+      }
+    }
+    return null;
+  }
+
+  function groupByCoach(states) {
+    var out = {};
+    for (var i = 0; i < CFG.COACHES.length; i++) out[CFG.COACHES[i]] = [];
+    for (var j = 0; j < states.length; j++) {
+      var s = states[j];
+      if (out[s.coach]) out[s.coach].push(s);
+    }
+    return out;
+  }
+
+  /* ---------- S1: New Red Flags ---------- */
+
+  function buildS1(coachCurrent, coachPrevious) {
+    var prevByClient = {};
+    for (var i = 0; i < coachPrevious.length; i++) {
+      prevByClient[coachPrevious[i].client] = coachPrevious[i];
+    }
+
     var newReds = [];
-    var total = coachStates.length;
-
-    for (var i = 0; i < total; i++) {
-      var s = coachStates[i];
-      var prevColor = (s.previousState && s.previousState.color) || "Green";
-      var currColor = (s.currentState  && s.currentState.color)  || "Green";
-
-      if (prevColor !== "Red" && currColor === "Red") {
+    for (var j = 0; j < coachCurrent.length; j++) {
+      var cur = coachCurrent[j];
+      if (cur.color !== "Red") continue;
+      var prev = prevByClient[cur.client];
+      if (!prev || prev.color !== "Red") {
         newReds.push({
-          clientName:      s.clientName,
-          dominantPathway: s.currentState.dominantPathway || null
+          client:        cur.client,
+          activePathway: cur.activePathway || (cur.pathways && cur.pathways[0] && cur.pathways[0].id) || "—",
+          pathwayWeek:   cur.pathwayWeek   || "—"
         });
       }
     }
 
-    var value = round1(pct(newReds.length, total));
+    var denom = coachCurrent.length;
+    var percent = pct(newReds.length, denom);
     return {
-      value:         value,
-      color:         colorForS1(value),
-      displayString: value + "%",
-      breakdown: {
-        clients:    newReds,
-        numerator:  newReds.length,
-        denominator: total
-      }
+      value: percent,
+      displayString: denom === 0 ? "—" : fmtPct(percent),
+      subDisplay: newReds.length + " of " + denom,
+      color: colorForPercentLowerBetter(percent, CFG.THRESHOLDS.newRed),
+      breakdown: newReds
     };
   }
 
-  /* ---------- S2: % Yellow/Red Cumulative ---------- */
+  /* ---------- S2: Yellow/Red Cumulative ---------- */
 
-  function computeS2(coachStates) {
-    var total = coachStates.length;
-    var yellows = [];
-    var reds = [];
-
-    for (var i = 0; i < total; i++) {
-      var s = coachStates[i];
-      var c = (s.currentState && s.currentState.color) || "Green";
-      if (c === "Yellow") {
-        yellows.push({
-          clientName:      s.clientName,
-          dominantPathway: s.currentState.dominantPathway || null
-        });
-      } else if (c === "Red") {
-        reds.push({
-          clientName:      s.clientName,
-          dominantPathway: s.currentState.dominantPathway || null
-        });
-      }
+  function buildS2(coachCurrent) {
+    var yellows = [], reds = [];
+    for (var i = 0; i < coachCurrent.length; i++) {
+      var s = coachCurrent[i];
+      if (s.color === "Yellow") yellows.push(s);
+      else if (s.color === "Red") reds.push(s);
     }
-
-    var combined = yellows.length + reds.length;
-    var value = round1(pct(combined, total));
+    var denom = coachCurrent.length;
+    var num   = yellows.length + reds.length;
+    var percent = pct(num, denom);
 
     return {
-      value:         value,
-      color:         colorForS2(value),
-      displayString: value + "%",
+      value: percent,
+      displayString: denom === 0 ? "—" : fmtPct(percent),
+      subDisplay: num + " of " + denom,
+      color: colorForPercentLowerBetter(percent, CFG.THRESHOLDS.yrCum),
       breakdown: {
-        yellows:    yellows,
-        reds:       reds,
-        numerator:  combined,
-        denominator: total
+        yellows: yellows.map(function (s) {
+          return { client: s.client, activePathway: s.activePathway || "—", pathwayWeek: s.pathwayWeek || "—" };
+        }),
+        reds: reds.map(function (s) {
+          return { client: s.client, activePathway: s.activePathway || "—", pathwayWeek: s.pathwayWeek || "—" };
+        })
       }
     };
   }
 
-  /* ---------- S3: % Black-Flagged (informational) ---------- */
+  /* ---------- S3: Black-Flagged (informational) ---------- */
 
-  function computeS3(coachStates) {
-    var total = coachStates.length;
-    var blackFlagged = [];
-
-    for (var i = 0; i < total; i++) {
-      var s = coachStates[i];
-      var bf = s.currentState && s.currentState.blackFlags;
+  function buildS3(coachCurrent) {
+    var blacks = [];
+    for (var i = 0; i < coachCurrent.length; i++) {
+      var s = coachCurrent[i];
+      var bf = s.blackFlags;
       if (bf && bf.active) {
-        blackFlagged.push({
-          clientName:    s.clientName,
-          lastTriggered: bf.lastTriggeredAt || null
+        blacks.push({
+          client:        s.client,
+          triggeredDate: bf.triggeredDate || bf.activatedDate || "—"
         });
       }
     }
+    var denom = coachCurrent.length;
+    var percent = pct(blacks.length, denom);
 
-    var value = round1(pct(blackFlagged.length, total));
     return {
-      value:         value,
-      color:         "neutral",
-      displayString: blackFlagged.length === 0 ? "0% ✓" : value + "%",
-      breakdown: {
-        clients:    blackFlagged,
-        numerator:  blackFlagged.length,
-        denominator: total
-      }
+      value: percent,
+      displayString: blacks.length === 0 ? "0%" : fmtPct(percent),
+      subDisplay: blacks.length + " of " + denom,
+      color: "neutral",
+      breakdown: blacks
     };
   }
 
-  /* ---------- S4: Renewals Last Week (informational) ----------
-   *
-   * Per decision in Phase 1 design: muestra muy pequeña por coach por semana
-   * (0-3 clientes típicamente). Mostrar como informational, sin thresholds.
-   *
-   * Source: Master Sheet col R (New End Date), col T (Resign?), col J (Coach).
-   * Window: the just-closed Coaching Week (Thu 00:00 -> Wed 23:59 ET).
-   *   With meetingDate = Thursday, the closed window is:
-   *     previous Thursday 00:00 -> previous Wednesday 23:59
-   *
-   * Numerator: clients in window with Resign? === "No"  (renewed)
-   * Denominator: clients in window with Resign? not blank (decision made)
-   * Excluded: rows with blank Resign?
-   */
+  /* ---------- S4: Renewals Last Week (informational) ---------- */
 
-  function computeS4(coachName, masterSheet, meetingDate) {
-    // Window: previous Thursday 00:00 ET through previous Wednesday 23:59 ET
-    // (the just-closed Coaching Week relative to today/Thursday).
-    var windowEnd = new Date(meetingDate.getTime());
-    windowEnd.setHours(0, 0, 0, 0);
-    // windowEnd is Thursday 00:00 ET → exclusive upper bound
-
-    var windowStart = new Date(windowEnd.getTime());
-    windowStart.setDate(windowStart.getDate() - 7);
-    // windowStart is previous Thursday 00:00 ET (inclusive)
+  function buildS4(coach, masterSheet, meetingDate) {
+    var weekEnd = new Date(meetingDate.getTime() - 1 * 24 * 60 * 60 * 1000);
+    weekEnd.setHours(23, 59, 59, 999);
+    var weekStart = new Date(weekEnd.getTime() - 6 * 24 * 60 * 60 * 1000);
+    weekStart.setHours(0, 0, 0, 0);
 
     var inWindow = [];
     for (var i = 0; i < masterSheet.length; i++) {
-      var row = masterSheet[i];
-      if (row.coach !== coachName) continue;
-      var endDate = parseDate(row.newEndDate);
-      if (!endDate) continue;
-      if (endDate >= windowStart && endDate < windowEnd) {
-        inWindow.push(row);
+      var r = masterSheet[i];
+      if (r.coach !== coach) continue;
+      var end = parseDateLoose(r.newEndDate);
+      if (!end) continue;
+      if (end >= weekStart && end <= weekEnd) {
+        inWindow.push({
+          client:  (r.firstName + " " + r.lastName).trim(),
+          endDate: r.newEndDate,
+          resign:  r.resign
+        });
       }
     }
 
-    var decided = inWindow.filter(function (r) {
-      return r.resign && r.resign.trim() !== "";
-    });
-    var renewed = decided.filter(function (r) {
-      return r.resign.trim().toLowerCase() === "no";
-    });
+    var X = 0, Y = 0;
+    for (var j = 0; j < inWindow.length; j++) {
+      var resign = (inWindow[j].resign || "").trim();
+      if (resign === "") continue;
+      Y++;
+      if (resign.toLowerCase() === "no") X++;
+    }
 
-    var pctValue = decided.length > 0 ? round1(pct(renewed.length, decided.length)) : null;
-    var display;
-    if (decided.length === 0) {
+    var display, sub;
+    if (inWindow.length === 0) {
       display = "—";
+      sub = "no contracts";
+    } else if (Y === 0) {
+      display = "0/0";
+      sub = "no decisions yet";
     } else {
-      display = renewed.length + "/" + decided.length + " (" + pctValue + "%)";
+      display = X + "/" + Y;
+      sub = fmtPct(pct(X, Y)) + " renewed";
     }
 
     return {
-      value:         pctValue,
-      color:         "neutral",
+      value: Y > 0 ? pct(X, Y) : null,
       displayString: display,
-      breakdown: {
-        clients:    inWindow.map(function (r) {
-          return {
-            clientName: (r.firstName + " " + r.lastName).trim(),
-            endDate:    r.newEndDate,
-            resign:     r.resign
-          };
-        }),
-        renewed:    renewed.length,
-        decided:    decided.length,
-        inWindow:   inWindow.length
-      }
+      subDisplay: sub,
+      color: "neutral",
+      breakdown: inWindow
     };
   }
 
-  /* ---------- public ---------- */
+  /* ---------- Top-level ---------- */
 
-  function computeForCoach(coachName, coachStates, masterSheet, meetingDate) {
-    return {
-      S1: computeS1(coachStates),
-      S2: computeS2(coachStates),
-      S3: computeS3(coachStates),
-      S4: computeS4(coachName, masterSheet, meetingDate)
-    };
+  function compute(states, masterSheet, meetingDate) {
+    var curByCoach  = groupByCoach(states.current);
+    var prevByCoach = groupByCoach(states.previous);
+
+    var out = {};
+    for (var i = 0; i < CFG.COACHES.length; i++) {
+      var c = CFG.COACHES[i];
+      out[c] = {
+        S1: buildS1(curByCoach[c], prevByCoach[c] || []),
+        S2: buildS2(curByCoach[c]),
+        S3: buildS3(curByCoach[c]),
+        S4: buildS4(c, masterSheet, meetingDate)
+      };
+    }
+    return out;
   }
 
   root.Scorecard = {
-    computeForCoach: computeForCoach,
-    _internal: {
-      computeS1: computeS1,
-      computeS2: computeS2,
-      computeS3: computeS3,
-      computeS4: computeS4
+    compute: compute,
+    helpers: {
+      pct: pct,
+      fmtPct: fmtPct,
+      colorForPercentLowerBetter: colorForPercentLowerBetter,
+      colorForPercentHigherBetter: colorForPercentHigherBetter,
+      parseDateLoose: parseDateLoose
     }
   };
 })(typeof window !== "undefined" ? window : this);
