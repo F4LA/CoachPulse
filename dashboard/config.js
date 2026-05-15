@@ -1,14 +1,11 @@
 /**
  * Coach Pulse Dashboard — Config
- *
- * Sheet IDs, API key reference, coach roster, thresholds, and metric metadata
- * (names + descriptions + threshold legends for UI rendering).
  */
 (function (root) {
   "use strict";
 
   var CONFIG = {
-    /* ---------- Data sources ---------- */
+    /* ---------- Data sources (read via Google Sheets API) ---------- */
     SHEETS: {
       ROSTER:         { id: "1VxxqmOVuXffLOpPvMWnSUHhyhkjIajtBeBoSV3xk1fc", tab: "Roster" },
       FORM_RESPONSES: { id: "1ugM0iOCwdaQpyDVPuJQfKRhu72NQrtC-hEjJ7PkGHoA", tab: "Form Responses 1" },
@@ -20,20 +17,23 @@
       }}
     },
 
-    /* ---------- Sheets API ---------- */
+    /* ---------- Sheets API (read-only, referrer-restricted) ---------- */
     API_KEY: "AIzaSyCbpE8CmLKpfmbMPLXkEmWe-5zEx53XyIg",
+
+    /* ---------- Apps Script Web App (writes for CB/CC/CD) ---------- */
+    WEB_APP_URL: "https://script.google.com/macros/s/AKfycbyRh5mZqGOsmso9NUtta_lQ2GEfSAPQFyso0eC4CJodbqLxvantIaEGlUIT_tCD8Zv6qA/exec",
 
     /* ---------- Coaches ---------- */
     COACHES: ["Brent", "Ceci", "Miguel", "Jackie"],
 
     /* ---------- Master Sheet columns (0-indexed) ---------- */
     MASTER_COLS: {
-      FIRST_NAME:    0,  // A
-      LAST_NAME:     1,  // B
-      EMAIL:         2,  // C
-      COACH:         9,  // J
-      NEW_END_DATE: 17,  // R
-      RESIGN:       19   // T
+      FIRST_NAME:    0,
+      LAST_NAME:     1,
+      EMAIL:         2,
+      COACH:         9,
+      NEW_END_DATE: 17,
+      RESIGN:       19
     },
 
     /* ---------- Engine pinning ---------- */
@@ -41,11 +41,8 @@
 
     /* ---------- Scorecard thresholds ---------- */
     THRESHOLDS: {
-      // S1 — New Red Flags: lower is better
       newRed:     { green: 6, yellow: 10 },
-      // S2 — Yellow/Red Cumulative: lower is better
       yrCum:      { green: 15, yellow: 20 },
-      // Form Submission Rate: higher is better. 100 green, 95-99 yellow, <95 red.
       formSub:    { green: 100, yellow: 95 }
     },
 
@@ -58,7 +55,7 @@
       RED:   ["No Decision - No Call Scheduled", "Did Not Renew - No Call Scheduled"]
     },
 
-    /* ---------- Metric metadata (used by renderer for UI labels) ---------- */
+    /* ---------- Metric metadata ---------- */
     METRICS: {
       S1: {
         title:       "New Red Flags",
@@ -110,13 +107,11 @@
       }
     },
 
-    /* ---------- Order of tiles within sections ---------- */
     METRIC_ORDER: {
       scorecard: ["S1", "S2", "S3", "S4"],
       behaviors: ["CA", "CB", "CC", "CD"]
     },
 
-    /* ---------- Misc ---------- */
     HISTORICAL_WEEKS: 8,
     ENGINE_LOOKBACK_WEEKS: 16,
     SLACK_CHANNEL_RENEWAL: "C095QSAR8M6"
