@@ -1,5 +1,9 @@
 /**
  * Coach Pulse Dashboard — Scorecard (S1–S4)
+ *
+ * Phase 4B.2 fix: meetingDate is Wed 23:59:59.999 ET (post 4B.1). S4's
+ * "Renewals Last Week" window is the Thu-Wed coaching week ending ON
+ * meetingDate, not meetingDate - 1.
  */
 (function (root) {
   "use strict";
@@ -10,14 +14,12 @@
   /* ---------- Color helpers ---------- */
 
   function colorForPercentLowerBetter(pct, thresholds) {
-    // lower is better. green if <=green, yellow if <=yellow, else red
     if (pct <= thresholds.green) return "green";
     if (pct <= thresholds.yellow) return "yellow";
     return "red";
   }
 
   function colorForPercentHigherBetter(pct, thresholds) {
-    // higher is better. green if >=green, yellow if >=yellow, else red
     if (pct >= thresholds.green) return "green";
     if (pct >= thresholds.yellow) return "yellow";
     return "red";
@@ -60,26 +62,8 @@
     return out;
   }
 
-  /* ---------- Pathway extraction from engine state ----------
-   *
-   * The engine returns:
-   *   {
-   *     dominantPathway: "P1" | "P2" | "P3" | null,
-   *     pathwayStates: {
-   *       p1: { color, streakLength, active, ... },
-   *       p2: [ { color, streakLength, ... }, ... ],
-   *       p3: { color, streakLength, active, ... }
-   *     }
-   *   }
-   *
-   * For the breakdown panel we need a human-readable
-   * { activePathway, pathwayWeek } pair.
-   *
-   * - activePathway: dominantPathway string ("P1", "P2", "P3"), or "—".
-   * - pathwayWeek: streakLength of the dominant pathway. For P2 (array),
-   *   we pick the entry with the highest streakLength that matches the
-   *   client's current color (driving the dominant call).
-   */
+  /* ---------- Pathway extraction ---------- */
+
   function pathwayInfo(state) {
     if (!state) return { activePathway: "—", pathwayWeek: "—" };
     var dom = state.dominantPathway;
@@ -173,7 +157,7 @@
     };
   }
 
-  /* ---------- S3: Black-Flagged (informational) ---------- */
+  /* ---------- S3: Black-Flagged ---------- */
 
   function buildS3(coachCurrent) {
     var blacks = [];
@@ -199,10 +183,13 @@
     };
   }
 
-  /* ---------- S4: Renewals Last Week (informational) ---------- */
-
+  /* ---------- S4: Renewals Last Week ---------- */
+  /*
+   * meetingDate is Wed 23:59:59.999. The Thu-Wed coaching week ends ON
+   * meetingDate. Scan contracts whose newEndDate falls in [Thu, Wed].
+   */
   function buildS4(coach, masterSheet, meetingDate) {
-    var weekEnd = new Date(meetingDate.getTime() - 1 * 24 * 60 * 60 * 1000);
+    var weekEnd = new Date(meetingDate.getTime());
     weekEnd.setHours(23, 59, 59, 999);
     var weekStart = new Date(weekEnd.getTime() - 6 * 24 * 60 * 60 * 1000);
     weekStart.setHours(0, 0, 0, 0);
