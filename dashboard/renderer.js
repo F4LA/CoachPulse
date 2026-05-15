@@ -1,11 +1,10 @@
 /**
  * Coach Pulse Dashboard — Renderer
  *
- * Phase 3B: CB and CC tiles now have interactive controls.
- * CB: Yes/No toggle
- * CC: Done/Pending/Missed segmented control
- *
- * On change → optimistic update + write to Apps Script Web App.
+ * Phase 3B: CB and CC tiles have interactive controls.
+ * Phase 4A: All scorecard tiles + CA + CD are clickable, opening a side
+ *           panel with the per-client breakdown. CB and CC are NOT
+ *           clickable — their full state is already on the tile.
  */
 (function (root) {
   "use strict";
@@ -61,11 +60,16 @@
     );
   }
 
+  function isClickable(metricKey) {
+    return !!(root.BreakdownPanel && root.BreakdownPanel.isClickable && root.BreakdownPanel.isClickable(metricKey));
+  }
+
   function renderTile(metricKey, metricData, coach, weekKey) {
     var meta = CFG.METRICS[metricKey];
     if (!meta) return "";
 
     var color = metricData.color || "neutral";
+    var clickable = isClickable(metricKey);
 
     // CB and CC get interactive controls IN PLACE OF the big value
     var valueBlock;
@@ -97,8 +101,13 @@
         '</div>';
     }
 
+    var tileClass = 'tile tile-' + color + (clickable ? ' tile-clickable' : '');
+    var clickAttrs = clickable
+      ? ' role="button" tabindex="0" data-clickable="true" data-coach="' + escapeHtml(coach) + '"'
+      : '';
+
     return (
-      '<div class="tile tile-' + color + '" data-metric="' + metricKey + '">' +
+      '<div class="' + tileClass + '" data-metric="' + metricKey + '"' + clickAttrs + '>' +
         '<div class="tile-header">' +
           '<div class="tile-title">' + escapeHtml(meta.title) + '</div>' +
           '<div class="tile-description">' + escapeHtml(meta.description) + '</div>' +
@@ -163,6 +172,7 @@
       '<div id="coach-content">' + coachContent + '</div>';
 
     wireControls(allMetrics, meetingDate);
+    wireBreakdownClicks();
   }
 
   function renderCoachContent(allMetrics, coach, meetingDate) {
@@ -171,22 +181,54 @@
     var weekKey = getWeekKey(meetingDate);
     container.innerHTML = renderCoachTab(coach, allMetrics, weekKey);
     wireControls(allMetrics, meetingDate);
+    wireBreakdownClicks();
   }
 
-  /* ---------- Wire interactive controls ---------- */
+  /* ---------- Wire CB/CC controls (Phase 3B) ---------- */
 
   function wireControls(allMetrics, meetingDate) {
     var groups = document.querySelectorAll(".tile-controls");
     groups.forEach(function (group) {
+      // Don't let control clicks bubble to the tile (which would open the
+      // breakdown panel for CB/CC if they were clickable — they aren't,
+      // but this is defense-in-depth and matters if we ever make them
+      // clickable for historical-week mode).
+      group.addEventListener("click", function (e) { e.stopPropagation(); });
+
       var control = group.getAttribute("data-control");
       var coach   = group.getAttribute("data-coach");
       var week    = group.getAttribute("data-week");
       var buttons = group.querySelectorAll(".ctrl-btn");
       buttons.forEach(function (btn) {
         btn.addEventListener("click", function (e) {
+          e.stopPropagation();
           var value = e.currentTarget.getAttribute("data-value");
           handleControlClick(control, coach, week, value, allMetrics, meetingDate, e.currentTarget);
         });
+      });
+    });
+  }
+
+  /* ---------- Wire breakdown clicks (Phase 4A) ---------- */
+
+  function wireBreakdownClicks() {
+    if (!root.BreakdownPanel) return;
+    var tiles = document.querySelectorAll('.tile[data-clickable="true"]');
+    tiles.forEach(function (tile) {
+      tile.addEventListener("click", function () {
+        var metricKey = tile.getAttribute("data-metric");
+        var coach     = tile.getAttribute("data-coach");
+        if (!metricKey || !coach) return;
+        root.BreakdownPanel.show(metricKey, coach);
+      });
+      tile.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          var metricKey = tile.getAttribute("data-metric");
+          var coach     = tile.getAttribute("data-coach");
+          if (!metricKey || !coach) return;
+          root.BreakdownPanel.show(metricKey, coach);
+        }
       });
     });
   }
@@ -211,11 +253,9 @@
     // Fire-and-forget the write
     root.ManualInputs.setCB_CC(week, coach, fields)
       .then(function () {
-        // no-cors means we can't read the response, but if no exception, assume success
         Array.prototype.forEach.call(group.querySelectorAll(".ctrl-btn"), function (b) {
           b.classList.remove("ctrl-saving");
         });
-        // Optimistically update local state so a tab switch still shows the new value
         if (allMetrics[coach] && allMetrics[coach][control.toUpperCase()]) {
           allMetrics[coach][control.toUpperCase()].value = value;
           allMetrics[coach][control.toUpperCase()].displayString = value;
