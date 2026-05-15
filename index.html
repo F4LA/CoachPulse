@@ -30,12 +30,6 @@
 
     main#main { padding: 20px 32px 64px; max-width: var(--container); margin: 0 auto; }
 
-    .meeting-meta {
-      color: var(--text-muted);
-      font-size: 13px;
-      margin-bottom: 16px;
-    }
-
     /* ---------- Tab strip ---------- */
     #tab-container {
       max-width: var(--container);
@@ -67,8 +61,72 @@
     .tab-dot-red    { background: var(--red); }
     .tab-dot-yellow { background: var(--yellow); }
 
+    /* ---------- Week navigation (Phase 4B.2) ---------- */
+    .week-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px 0 4px;
+    }
+    .week-nav-label {
+      font-size: 14px;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+      min-width: 240px;
+      text-align: center;
+    }
+    .week-nav-label strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .week-nav-arrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      transition: all 120ms ease;
+      user-select: none;
+    }
+    .week-nav-arrow:hover:not(.week-nav-arrow-disabled):not(:disabled) {
+      border-color: var(--steel-400);
+      color: var(--steel-700);
+      background: var(--steel-tint);
+      transform: translateY(-1px);
+    }
+    .week-nav-arrow:focus {
+      outline: none;
+      border-color: var(--steel-400);
+      box-shadow: 0 0 0 3px rgba(56, 153, 204, 0.18);
+    }
+    .week-nav-arrow:focus:not(:focus-visible) { box-shadow: none; }
+    .week-nav-arrow-disabled,
+    .week-nav-arrow:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: var(--surface-2);
+      color: var(--text-faint);
+      border-color: var(--border);
+    }
+    .week-nav-arrow-disabled:hover,
+    .week-nav-arrow:disabled:hover {
+      transform: none;
+      background: var(--surface-2);
+      color: var(--text-faint);
+      border-color: var(--border);
+    }
+
     /* ---------- Coach header ---------- */
-    .coach-header { margin: 28px 0 8px; }
+    .coach-header { margin: 20px 0 8px; }
     .coach-name {
       font-family: var(--font-display);
       font-size: 40px;
@@ -163,6 +221,26 @@
       letter-spacing: 0.02em;
     }
 
+    /* ---------- Tile loading skeleton (Phase 4B.2) ---------- */
+    .tile.tile-loading { pointer-events: none; }
+    .tile-skeleton {
+      background: linear-gradient(
+        90deg,
+        var(--border) 0%,
+        var(--surface-2) 50%,
+        var(--border) 100%
+      );
+      background-size: 200% 100%;
+      border-radius: var(--radius-sm);
+      animation: tile-skeleton-pulse 1.4s ease-in-out infinite;
+    }
+    .tile-skeleton-value { height: 32px; width: 60%; margin-bottom: 8px; }
+    .tile-skeleton-sub   { height: 12px; width: 80%; }
+    @keyframes tile-skeleton-pulse {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
     /* ---------- Interactive controls (CB / CC) ---------- */
     .tile-value-block-controls {
       align-items: stretch;
@@ -228,6 +306,12 @@
       25% { transform: translateX(-3px); }
       75% { transform: translateX(3px); }
     }
+
+    /* ---------- Responsive (Phase 4B.2) ---------- */
+    @media (max-width: 540px) {
+      .week-nav { gap: 10px; padding: 12px 0 4px; }
+      .week-nav-label { min-width: 0; font-size: 13px; }
+    }
   </style>
 </head>
 <body>
@@ -266,6 +350,7 @@
   <script src="dashboard/checklist.js"></script>
   <script src="dashboard/renewal-radar.js"></script>
   <script src="dashboard/week-cache.js"></script>
+  <script src="dashboard/week-nav.js"></script>
   <script src="dashboard/renderer.js"></script>
   <script src="dashboard/tabs.js"></script>
   <script src="app.js"></script>
