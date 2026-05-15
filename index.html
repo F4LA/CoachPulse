@@ -81,11 +81,11 @@
 
     /* ---------- Coach header ---------- */
     .coach-header {
-      margin: 24px 0 8px;
+      margin: 28px 0 8px;
     }
     .coach-name {
       font-family: var(--font-display);
-      font-size: 36px;
+      font-size: 40px;
       letter-spacing: 0.04em;
       margin: 0;
       color: var(--text);
@@ -93,7 +93,7 @@
 
     /* ---------- Sections ---------- */
     .metric-section {
-      margin-top: 28px;
+      margin-top: 32px;
     }
     .section-title {
       font-size: 11px;
@@ -101,29 +101,29 @@
       letter-spacing: 0.18em;
       text-transform: uppercase;
       color: var(--text-faint);
-      margin: 0 0 12px;
+      margin: 0 0 14px;
     }
 
     /* ---------- Tile grid ---------- */
     .tile-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
+      gap: 16px;
     }
     @media (max-width: 1100px) {
       .tile-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
-    /* ---------- Tile ---------- */
+    /* ---------- Tile (slightly larger than 3A v1) ---------- */
     .tile {
       background: var(--surface);
       border: 1px solid var(--border);
       border-left: 4px solid var(--border-strong);
       border-radius: var(--radius);
-      padding: 16px 18px;
+      padding: 20px 22px;
       display: flex;
       flex-direction: column;
-      min-height: 170px;
+      min-height: 200px;
       box-shadow: var(--shadow-sm);
     }
     .tile-green   { border-left-color: var(--green); }
@@ -132,20 +132,20 @@
     .tile-neutral { border-left-color: var(--border-strong); }
 
     .tile-header {
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .tile-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: 0.02em;
       color: var(--text);
       line-height: 1.3;
     }
     .tile-description {
-      font-size: 11px;
+      font-size: 11.5px;
       color: var(--text-muted);
-      margin-top: 4px;
-      line-height: 1.4;
+      margin-top: 5px;
+      line-height: 1.45;
     }
 
     .tile-value-block {
@@ -154,11 +154,11 @@
       flex-direction: column;
       justify-content: center;
       align-items: flex-start;
-      padding: 4px 0;
+      padding: 6px 0;
     }
     .tile-value {
       font-family: var(--font-display);
-      font-size: 36px;
+      font-size: 40px;
       letter-spacing: 0.02em;
       line-height: 1;
       color: var(--text);
@@ -167,18 +167,18 @@
     .tile-yellow .tile-value { color: var(--yellow); }
     .tile-red    .tile-value { color: var(--red); }
     .tile-sub {
-      font-size: 11px;
+      font-size: 11.5px;
       color: var(--text-faint);
-      margin-top: 4px;
+      margin-top: 6px;
       font-weight: 500;
     }
 
     .tile-legend {
-      font-size: 10px;
+      font-size: 10.5px;
       color: var(--text-faint);
       border-top: 1px solid var(--border);
-      padding-top: 8px;
-      margin-top: 8px;
+      padding-top: 10px;
+      margin-top: 10px;
       letter-spacing: 0.02em;
     }
   </style>
