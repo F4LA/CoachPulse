@@ -125,7 +125,7 @@
     ];
     var html = listSection(null, rows, cols, "No new Red flags this week.");
     if (metric.subDisplay) {
-      html += footerLine(metric.subDisplay + " new Red");
+      html += footerLine(metric.subDisplay + " new Red this week");
     }
     return html;
   }
