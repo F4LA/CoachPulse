@@ -83,7 +83,7 @@
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener("click", function (e) {
         var coach = e.currentTarget.getAttribute("data-coach");
-        switchTo(allMetrics, coach);
+        switchTo(allMetrics, coach, meetingDate);
       });
     }
 
@@ -91,7 +91,7 @@
     root.Renderer.render(allMetrics, meetingDate, activeCoach);
   }
 
-  function switchTo(allMetrics, coach) {
+  function switchTo(allMetrics, coach, meetingDate) {
     // Update tab strip active state
     var container = document.getElementById("tab-container");
     if (container) {
@@ -106,7 +106,7 @@
     }
 
     // Re-render coach content only
-    root.Renderer.renderCoachContent(allMetrics, coach);
+    root.Renderer.renderCoachContent(allMetrics, coach, meetingDate);
   }
 
   root.Tabs = {
