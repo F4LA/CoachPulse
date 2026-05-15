@@ -1,12 +1,15 @@
 /**
  * Coach Pulse Dashboard — Behavior Checklist (CA, CB, CC)
  *
- * CA fix: Form Responses has columns:
+ * Phase 4B.2 fix: meetingDate is Wed 23:59:59.999 ET (post 4B.1 change to
+ * getDefaultMeetingDate). The Thu-Wed coaching week ends ON meetingDate,
+ * not the day before. Removed the legacy -1 day shift.
+ *
+ * CA: Form Responses has columns:
  *   A: Timestamp
  *   B: Client (NOT coach — this is the client the form is about)
  *   C: Exempt
  *   D: Justification
- *   ...
  *
  * To attribute a form to a coach, we look up the client in the roster
  * and use that client's assigned coach.
@@ -19,8 +22,14 @@
   if (!CFG)     throw new Error("checklist: CoachPulseConfig not loaded");
   if (!helpers) throw new Error("checklist: Scorecard helpers not loaded");
 
+  /**
+   * meetingDate is Wed 23:59:59.999 ET. The coaching week is the Thu-Wed
+   * span ending ON meetingDate. So:
+   *   weekEnd   = meetingDate (Wed 23:59:59.999)
+   *   weekStart = meetingDate - 6 days, set to 00:00:00 (the Thu of that week)
+   */
   function getCoachingWeekWindow(meetingDate) {
-    var weekEnd = new Date(meetingDate.getTime() - 1 * 24 * 60 * 60 * 1000);
+    var weekEnd = new Date(meetingDate.getTime());
     weekEnd.setHours(23, 59, 59, 999);
     var weekStart = new Date(weekEnd.getTime() - 6 * 24 * 60 * 60 * 1000);
     weekStart.setHours(0, 0, 0, 0);
@@ -37,15 +46,10 @@
   /* ---------- Form Responses column positions ---------- */
 
   var FR_COL_TIMESTAMP = 0;
-  var FR_COL_CLIENT    = 1;  // confirmed via inspection of actual sheet headers
+  var FR_COL_CLIENT    = 1;
 
   /* ---------- CA: Form Submission Rate ---------- */
-  /*
-   * Counts unique clients (per coach) for whom a Minimum Standards form
-   * was submitted during the closed coaching week.
-   *
-   * Coach is derived by looking up the client in the roster map.
-   */
+
   function buildCA(coach, formResponses, clientToCoach, rosterCount, window) {
     var submitted = {};
 
@@ -173,7 +177,7 @@
 
   function compute(data, states, meetingDate) {
     var window  = getCoachingWeekWindow(meetingDate);
-    var weekKey = ymdET(window.end);
+    var weekKey = ymdET(window.end);  // window.end is the Wed itself
 
     // Build client → coach map from roster
     var clientToCoach = {};
@@ -182,7 +186,7 @@
       if (entry.client) clientToCoach[entry.client] = entry.coach;
     }
 
-    // Active clients per coach (from engine states, already excludes inactive)
+    // Active clients per coach
     var clientsByCoach = {};
     for (var i = 0; i < CFG.COACHES.length; i++) clientsByCoach[CFG.COACHES[i]] = [];
     for (var j = 0; j < states.current.length; j++) {
@@ -190,7 +194,7 @@
       if (clientsByCoach[s.coach]) clientsByCoach[s.coach].push(s.client);
     }
 
-    // Diagnostic: log forms whose client isn't in roster (typos, deactivated clients, etc.)
+    // Diagnostic: log forms whose client isn't in roster
     var unmatched = {};
     for (var f = 1; f < data.formResponses.length; f++) {
       var row = data.formResponses[f];
