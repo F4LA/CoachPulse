@@ -30,7 +30,6 @@
 
     main#main { padding: 20px 32px 64px; max-width: var(--container); margin: 0 auto; }
 
-    /* ---------- Meeting meta line ---------- */
     .meeting-meta {
       color: var(--text-muted);
       font-size: 13px;
@@ -45,10 +44,7 @@
       border-bottom: 1px solid var(--border);
       background: var(--surface);
     }
-    .tab-strip {
-      display: flex;
-      gap: 4px;
-    }
+    .tab-strip { display: flex; gap: 4px; }
     .tab {
       appearance: none;
       background: transparent;
@@ -66,23 +62,13 @@
       transition: color 120ms ease, border-color 120ms ease;
     }
     .tab:hover { color: var(--text); }
-    .tab-active {
-      color: var(--text);
-      border-bottom-color: var(--navy-900);
-    }
-    .tab-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
+    .tab-active { color: var(--text); border-bottom-color: var(--navy-900); }
+    .tab-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
     .tab-dot-red    { background: var(--red); }
     .tab-dot-yellow { background: var(--yellow); }
 
     /* ---------- Coach header ---------- */
-    .coach-header {
-      margin: 28px 0 8px;
-    }
+    .coach-header { margin: 28px 0 8px; }
     .coach-name {
       font-family: var(--font-display);
       font-size: 40px;
@@ -92,9 +78,7 @@
     }
 
     /* ---------- Sections ---------- */
-    .metric-section {
-      margin-top: 32px;
-    }
+    .metric-section { margin-top: 32px; }
     .section-title {
       font-size: 11px;
       font-weight: 700;
@@ -104,7 +88,6 @@
       margin: 0 0 14px;
     }
 
-    /* ---------- Tile grid ---------- */
     .tile-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -114,7 +97,7 @@
       .tile-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
-    /* ---------- Tile (slightly larger than 3A v1) ---------- */
+    /* ---------- Tile ---------- */
     .tile {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -131,9 +114,7 @@
     .tile-red     { border-left-color: var(--red); }
     .tile-neutral { border-left-color: var(--border-strong); }
 
-    .tile-header {
-      margin-bottom: 14px;
-    }
+    .tile-header { margin-bottom: 14px; }
     .tile-title {
       font-size: 14px;
       font-weight: 700;
@@ -181,6 +162,72 @@
       margin-top: 10px;
       letter-spacing: 0.02em;
     }
+
+    /* ---------- Interactive controls (CB / CC) ---------- */
+    .tile-value-block-controls {
+      align-items: stretch;
+      justify-content: flex-start;
+    }
+    .tile-current {
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tile-green  .tile-current { color: var(--green); }
+    .tile-yellow .tile-current { color: var(--yellow); }
+    .tile-red    .tile-current { color: var(--red); }
+
+    .tile-controls {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .ctrl-btn {
+      flex: 1;
+      appearance: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 120ms ease;
+    }
+    .ctrl-btn:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .ctrl-active {
+      color: white;
+      border-color: transparent;
+    }
+    .ctrl-active-green  { background: var(--green); }
+    .ctrl-active-yellow { background: var(--yellow); }
+    .ctrl-active-red    { background: var(--red); }
+    .ctrl-active:hover  { opacity: 0.92; color: white; }
+
+    .ctrl-saving {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .ctrl-error {
+      animation: shake 200ms ease;
+      background: var(--red-bg) !important;
+      color: var(--red) !important;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
   </style>
 </head>
 <body>
@@ -212,6 +259,7 @@
   <!-- Dashboard modules -->
   <script src="dashboard/config.js"></script>
   <script src="dashboard/sheets-reader.js"></script>
+  <script src="dashboard/manual-inputs.js"></script>
   <script src="dashboard/state-builder.js"></script>
   <script src="dashboard/scorecard.js"></script>
   <script src="dashboard/checklist.js"></script>
