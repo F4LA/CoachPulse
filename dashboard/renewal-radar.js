@@ -1,5 +1,10 @@
 /**
  * Coach Pulse Dashboard — Renewal Radar (CD: Renewals Next 2 Weeks)
+ *
+ * Phase 4B.2 fix: meetingDate is Wed 23:59:59.999 ET (post 4B.1). The
+ * 14-day forward window starts on the Thursday AFTER meetingDate (the
+ * day after the closed coaching week). weekKey is the Wed itself, not
+ * meetingDate - 1.
  */
 (function (root) {
   "use strict";
@@ -9,8 +14,13 @@
   if (!CFG)     throw new Error("renewal-radar: CoachPulseConfig not loaded");
   if (!helpers) throw new Error("renewal-radar: Scorecard helpers not loaded");
 
+  /**
+   * meetingDate is Wed 23:59:59.999. Renewals Next 2 Weeks looks forward
+   * starting Thursday (the day after meetingDate) for 14 days.
+   */
   function getWindow(meetingDate) {
-    var start = new Date(meetingDate);
+    // Thursday after meetingDate, 00:00:00.
+    var start = new Date(meetingDate.getTime() + 1);
     start.setHours(0, 0, 0, 0);
     var end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000 - 1);
     return { start: start, end: end };
@@ -47,13 +57,18 @@
     return "";
   }
 
+  /**
+   * weekKey is the Wed itself (meetingDate's date), not meetingDate - 1.
+   */
+  function weekKeyOf(meetingDate) {
+    return meetingDate.getFullYear() + "-" +
+      String(meetingDate.getMonth() + 1).padStart(2, "0") + "-" +
+      String(meetingDate.getDate()).padStart(2, "0");
+  }
+
   function compute(data, meetingDate) {
     var window = getWindow(meetingDate);
-    var closingWed = new Date(meetingDate.getTime() - 1 * 24 * 60 * 60 * 1000);
-    var weekKey =
-      closingWed.getFullYear() + "-" +
-      String(closingWed.getMonth() + 1).padStart(2, "0") + "-" +
-      String(closingWed.getDate()).padStart(2, "0");
+    var weekKey = weekKeyOf(meetingDate);
 
     var out = {};
     for (var i = 0; i < CFG.COACHES.length; i++) out[CFG.COACHES[i]] = { clients: [] };
@@ -87,9 +102,7 @@
       result[c] = {
         CD: {
           value: list.length,
-          displayString: list.length === 0
-            ? "—"
-            : String(list.length),
+          displayString: list.length === 0 ? "—" : String(list.length),
           subDisplay: list.length === 0
             ? "no clients in window"
             : (list.length === 1 ? "1 client" : list.length + " clients") +
