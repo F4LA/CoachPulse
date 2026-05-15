@@ -92,12 +92,20 @@
     // Build content for active coach only (others render on tab switch)
     var coachContent = renderCoachTab(activeCoach, allMetrics);
 
-    var dateStr = meetingDate.toDateString();
+    // Format meeting day as "Thursday, May 14 2026" (toDateString returns "Thu May 14 2026")
+    function formatLong(d) {
+      var months = ["January","February","March","April","May","June",
+                    "July","August","September","October","November","December"];
+      var days   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      return days[d.getDay()] + ", " + months[d.getMonth()] + " " + d.getDate() + " " + d.getFullYear();
+    }
+
+    var meetingStr = formatLong(meetingDate);
+    var weekEndStr = formatLong(new Date(meetingDate.getTime() - 24*60*60*1000));
 
     main.innerHTML =
-      '<div class="meeting-meta">Meeting day: <strong>' + escapeHtml(dateStr) +
-      '</strong>  ·  Closed coaching week ended Wednesday ' +
-      escapeHtml(new Date(meetingDate.getTime() - 24*60*60*1000).toDateString()) +
+      '<div class="meeting-meta">Meeting day: <strong>' + escapeHtml(meetingStr) +
+      '</strong>  ·  Closed coaching week ended ' + escapeHtml(weekEndStr) +
       '</div>' +
       '<div id="coach-content">' + coachContent + '</div>';
   }
