@@ -1,32 +1,28 @@
 /**
  * Coach Pulse Dashboard — App
  *
- * Phase 4B wiring:
+ * Phase 4B.2 wiring:
  *   - Default meeting date is the most recently closed Wednesday (Thu-Wed
  *     coaching week), not the next Thursday.
- *   - WeekCache.init(data) is called after data loads so subsequent phases
- *     (4B.2 navigation, 4B.3 historical table) can request other weeks.
- *
- * Pipeline for the initial render still runs synchronously here. Phase
- * 4B.2 will route initial render through WeekCache too, but for now
- * the current snapshot is computed inline as before.
+ *   - WeekCache.init(data) is called after data loads.
+ *   - After initial render, WeekNav is mounted into the #week-nav-container
+ *     slot rendered by Renderer.
+ *   - WeekNav.onWeekChange triggers loading-state rerender + fetch +
+ *     final rerender + tab strip refresh.
+ *   - activeCoach is owned by app.js and survives rerenders.
+ *   - Tabs delegate clicks back to CoachPulseApp.switchCoach.
  */
 (function (root) {
   "use strict";
 
   var CFG = root.CoachPulseConfig;
 
-  // ---------------------------------------------------------------------------
-  // Default meeting date: most recently closed Wednesday 23:59:59.999 ET.
-  //
-  // ET-anchored to handle DST. Weekday in ET: Sun=0..Wed=3..Sat=6.
-  // Days to subtract from "today" to reach the most recent Wednesday:
-  //   Sun (0) -> -4   Mon (1) -> -5   Tue (2) -> -6
-  //   Wed (3) -> -7 if before 23:59:59.999 ET, else 0
-  //   Thu (4) -> -1   Fri (5) -> -2   Sat (6) -> -3
-  //
-  // Today (May 14) is Thursday → -1 → Wednesday May 13 23:59:59.999 ET.
-  // ---------------------------------------------------------------------------
+  // ----- App state -----
+  var activeCoach = null;
+  var currentMetrics = null;
+  var currentMeetingDate = null;
+
+  // ----- Default meeting date (ET-anchored) -----
 
   var TZ = "America/New_York";
 
@@ -80,35 +76,38 @@
     var now = new Date();
     var et = etPartsOf(now);
 
-    // Candidate: today's Wed end if today is Wed; otherwise back up to prior Wed.
     var daysBack;
     if (et.weekday === 3) {
-      // Today is Wed in ET. Compare against today's 23:59:59.999 ET.
       daysBack = 0;
     } else {
-      // Days back to reach prior Wed: weekday - 3, mod 7, with Wed→7 (not 0).
       daysBack = (et.weekday - 3 + 7) % 7;
-      if (daysBack === 0) daysBack = 7; // safety, shouldn't hit here
+      if (daysBack === 0) daysBack = 7;
     }
 
-    // Build candidate Wed 23:59:59.999 ET.
     var baseNoon = fromET(et.year, et.month, et.day, 12, 0, 0, 0);
     var wedNoon = new Date(baseNoon.getTime() - daysBack * 86400000);
     var wedEt = etPartsOf(wedNoon);
     var wedEnd = fromET(wedEt.year, wedEt.month, wedEt.day, 23, 59, 59, 999);
 
-    // If today is Wed but the day hasn't closed yet, step back one full week.
     if (et.weekday === 3 && now.getTime() < wedEnd.getTime()) {
       wedEnd = new Date(wedEnd.getTime() - 7 * 86400000);
     }
     return wedEnd;
   }
 
+  // ----- Status helpers -----
+
   function showStatus(msg, kind) {
     var el = document.getElementById("status");
     if (!el) return;
+    el.style.display = "";
     el.className = "status " + (kind || "");
     el.textContent = msg;
+  }
+
+  function hideStatus() {
+    var el = document.getElementById("status");
+    if (el) el.style.display = "none";
   }
 
   function confirmEngineLoaded() {
@@ -128,7 +127,7 @@
   function confirmDashboardModulesLoaded() {
     var required = [
       "SheetsReader", "StateBuilder", "Scorecard", "Checklist",
-      "RenewalRadar", "Tabs", "WeekCache"
+      "RenewalRadar", "Tabs", "WeekCache", "WeekNav", "Renderer"
     ];
     var missing = [];
     for (var i = 0; i < required.length; i++) {
@@ -139,10 +138,54 @@
     }
   }
 
-  function hideStatus() {
-    var el = document.getElementById("status");
-    if (el) el.style.display = "none";
+  // ----- Core handlers -----
+
+  /**
+   * Called by tabs.js when a coach tab is clicked.
+   * Updates activeCoach, repaints the tab strip's active state, and
+   * rerenders the coach content for the current week.
+   */
+  function switchCoach(coach) {
+    if (!coach || coach === activeCoach) return;
+    activeCoach = coach;
+    root.Tabs.setActiveTab(coach);
+    root.Renderer.renderCoachContent(currentMetrics, coach, currentMeetingDate);
   }
+
+  /**
+   * Called by WeekNav when the user clicks ◀ or ▶.
+   * 1) Render skeleton tiles for the active coach immediately.
+   * 2) Fetch metrics for the new week via WeekCache.
+   * 3) Rerender with real data + refresh tab strip dots/order.
+   */
+  function handleWeekChange(newMeetingDate) {
+    currentMeetingDate = newMeetingDate;
+
+    // 1. Optimistic skeleton render.
+    root.Renderer.renderCoachContent(null, activeCoach, newMeetingDate, { loading: true });
+
+    // 2. Fetch.
+    root.WeekCache.getMetricsForWeek(newMeetingDate)
+      .then(function (metrics) {
+        if (!metrics) {
+          console.error("[CoachPulse] Failed to load metrics for week:", newMeetingDate);
+          showStatus("Failed to load that week. Try again.", "error");
+          return;
+        }
+        // Ignore stale responses (user clicked again before this resolved).
+        if (currentMeetingDate.getTime() !== newMeetingDate.getTime()) return;
+
+        currentMetrics = metrics;
+        root.Renderer.renderCoachContent(metrics, activeCoach, newMeetingDate);
+        root.Tabs.updateTabStrip(metrics, activeCoach);
+      })
+      .catch(function (err) {
+        console.error("[CoachPulse] Week change error:", err);
+        showStatus("Failed to load that week: " + err.message, "error");
+      });
+  }
+
+  // ----- Init -----
 
   function init() {
     showStatus("Loading coaching data…", "loading");
@@ -163,12 +206,9 @@
       .then(function (data) {
         root.__cpData = data;
 
-        // Initialize the week cache so phases 4B.2 / 4B.3 can request other weeks.
-        // The initial render below still computes inline; we'll route it through
-        // WeekCache in 4B.2.
         root.WeekCache.init(data);
 
-        var states = root.StateBuilder.build(data, meetingDate);
+        var states    = root.StateBuilder.build(data, meetingDate);
         var scorecard = root.Scorecard.compute(states, data.masterSheet, meetingDate);
         var checklist = root.Checklist.compute(data, states, meetingDate);
         var renewal   = root.RenewalRadar.compute(data, meetingDate);
@@ -184,18 +224,40 @@
           };
         }
 
+        // Stash state.
+        currentMetrics = metrics;
+        currentMeetingDate = meetingDate;
+        activeCoach = root.Tabs.sortCoaches(metrics)[0];
+
         root.__cpMetrics = metrics;
         root.__cpMeetingDate = meetingDate;
         console.log("[CoachPulse] Metrics:", metrics);
 
         hideStatus();
-        root.Tabs.mountTabs(metrics, meetingDate);
+
+        // Order matters:
+        // 1) Tabs first (renders #tab-container only).
+        // 2) Renderer.render (renders #week-nav-container slot + content).
+        // 3) WeekNav.mount (fills the slot).
+        // 4) Subscribe to week changes.
+        root.Tabs.mountTabs(metrics, meetingDate, activeCoach);
+        root.Renderer.render(metrics, meetingDate, activeCoach);
+        root.WeekNav.mount(meetingDate);
+        root.WeekNav.onWeekChange(handleWeekChange);
       })
       .catch(function (err) {
         showStatus("Load failed: " + err.message, "error");
         console.error("[CoachPulse] Error:", err);
       });
   }
+
+  // Public hooks (tabs.js calls this; tests may also).
+  root.CoachPulseApp = {
+    switchCoach: switchCoach,
+    getActiveCoach: function () { return activeCoach; },
+    getCurrentMeetingDate: function () { return currentMeetingDate; },
+    getCurrentMetrics: function () { return currentMetrics; }
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
