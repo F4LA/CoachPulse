@@ -1,25 +1,9 @@
 /**
- * Coach Pulse Dashboard — Breakdown Panel (Phase 4A)
+ * Coach Pulse Dashboard — Breakdown Panel (Phase 4A + 4B.2 fix)
  *
- * Renders a side panel sliding in from the right with the client list
- * behind each metric. Triggered by clicks on tile elements with
- * data-metric attributes (set by renderer.js).
- *
- * Contract:
- *   - reads metric data from window.__cpMetrics for the active coach
- *   - renders into #breakdown-root (which lives once in index.html)
- *   - close: X button, click outside the panel, ESC key
- *
- * Per-metric breakdown shape:
- *   S1: list of newly-Red clients with active pathway + pathway week
- *   S2: two lists (Yellow, Red), each client with pathway + pathway week
- *   S3: list of black-flagged clients with triggered date
- *   S4: list of contracts ending last week with renewal decision
- *   CA: list of NON-submitters with last submission date
- *   CD: list of clients with contract ending in next 14 days + status
- *
- * CB and CC are intentionally NOT clickable — their full state is already
- * visible on the tile (value + last-updated timestamp).
+ * Phase 4B.2 fix: read live metrics from CoachPulseApp.getCurrentMetrics()
+ * so the panel reflects the currently-selected week, not the initial load.
+ * Falls back to window.__cpMetrics for legacy compatibility.
  */
 (function (root) {
   "use strict";
@@ -57,7 +41,6 @@
       '</aside>';
     document.body.appendChild(root_);
 
-    // Click outside / X / ESC to close
     root_.addEventListener("click", function (e) {
       if (e.target && e.target.getAttribute && e.target.getAttribute("data-bp-close") === "true") {
         close();
@@ -124,9 +107,7 @@
       { label: "Pathway Week",   get: function (r) { return r.pathwayWeek; } }
     ];
     var html = listSection(null, rows, cols, "No new Red flags this week.");
-    if (metric.subDisplay) {
-      html += footerLine(metric.subDisplay + " new Red this week");
-    }
+    if (metric.subDisplay) html += footerLine(metric.subDisplay + " new Red this week");
     return html;
   }
 
@@ -185,8 +166,6 @@
   }
 
   function renderCD(metric) {
-    // CD shape may be { breakdown: [...] } or have the list at a different
-    // key. Try a few likely keys for resilience; default to empty.
     var rows =
       (metric.breakdown && (metric.breakdown.clients || metric.breakdown)) ||
       metric.clients ||
@@ -198,12 +177,7 @@
       { label: "End Date", get: function (r) { return r.endDate || r.end_date; } },
       { label: "Status",   get: function (r) { return r.status; } }
     ];
-    var html = listSection(
-      null,
-      rows,
-      cols,
-      "No contracts ending in the next 14 days."
-    );
+    var html = listSection(null, rows, cols, "No contracts ending in the next 14 days.");
     if (metric.subDisplay) html += footerLine(metric.subDisplay);
     return html;
   }
@@ -220,16 +194,25 @@
   };
 
   /**
-   * Open the panel for a given metric/coach using whatever data is currently
-   * stored on window.__cpMetrics.
+   * Returns the live metrics object for the currently-selected week.
+   * Prefers CoachPulseApp (which app.js updates on every week change).
+   * Falls back to window.__cpMetrics for legacy compatibility.
    */
+  function getCurrentMetrics() {
+    if (root.CoachPulseApp && typeof root.CoachPulseApp.getCurrentMetrics === "function") {
+      var m = root.CoachPulseApp.getCurrentMetrics();
+      if (m) return m;
+    }
+    return root.__cpMetrics || {};
+  }
+
   function show(metricKey, coach) {
     var meta = CFG.METRICS[metricKey];
     if (!meta) {
       console.warn("[breakdown-panel] unknown metric:", metricKey);
       return;
     }
-    var allMetrics = root.__cpMetrics || {};
+    var allMetrics = getCurrentMetrics();
     var coachMetrics = allMetrics[coach];
     if (!coachMetrics || !coachMetrics[metricKey]) {
       console.warn("[breakdown-panel] no data for", coach, metricKey);
@@ -237,10 +220,7 @@
       return;
     }
     var renderer = METRIC_RENDERERS[metricKey];
-    if (!renderer) {
-      // Clickability should already be gated, but be defensive.
-      return;
-    }
+    if (!renderer) return;
     var bodyHtml = renderer(coachMetrics[metricKey]);
     open(meta.title + " — " + coach, bodyHtml);
   }
