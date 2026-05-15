@@ -60,6 +60,54 @@
     return out;
   }
 
+  /* ---------- Pathway extraction from engine state ----------
+   *
+   * The engine returns:
+   *   {
+   *     dominantPathway: "P1" | "P2" | "P3" | null,
+   *     pathwayStates: {
+   *       p1: { color, streakLength, active, ... },
+   *       p2: [ { color, streakLength, ... }, ... ],
+   *       p3: { color, streakLength, active, ... }
+   *     }
+   *   }
+   *
+   * For the breakdown panel we need a human-readable
+   * { activePathway, pathwayWeek } pair.
+   *
+   * - activePathway: dominantPathway string ("P1", "P2", "P3"), or "—".
+   * - pathwayWeek: streakLength of the dominant pathway. For P2 (array),
+   *   we pick the entry with the highest streakLength that matches the
+   *   client's current color (driving the dominant call).
+   */
+  function pathwayInfo(state) {
+    if (!state) return { activePathway: "—", pathwayWeek: "—" };
+    var dom = state.dominantPathway;
+    if (!dom) return { activePathway: "—", pathwayWeek: "—" };
+    var key = String(dom).toLowerCase();
+    var ps = state.pathwayStates || {};
+
+    var week = null;
+    if (key === "p2") {
+      var arr = ps.p2 || [];
+      var maxLen = 0;
+      for (var i = 0; i < arr.length; i++) {
+        var sl = (arr[i] && arr[i].streakLength) || 0;
+        if (sl > maxLen) maxLen = sl;
+      }
+      week = maxLen > 0 ? maxLen : null;
+    } else if (key === "p1") {
+      week = (ps.p1 && ps.p1.streakLength) || null;
+    } else if (key === "p3") {
+      week = (ps.p3 && ps.p3.streakLength) || null;
+    }
+
+    return {
+      activePathway: String(dom).toUpperCase(),
+      pathwayWeek:   week != null && week > 0 ? "Week " + week : "—"
+    };
+  }
+
   /* ---------- S1: New Red Flags ---------- */
 
   function buildS1(coachCurrent, coachPrevious) {
@@ -74,10 +122,11 @@
       if (cur.color !== "Red") continue;
       var prev = prevByClient[cur.client];
       if (!prev || prev.color !== "Red") {
+        var info = pathwayInfo(cur);
         newReds.push({
           client:        cur.client,
-          activePathway: cur.activePathway || (cur.pathways && cur.pathways[0] && cur.pathways[0].id) || "—",
-          pathwayWeek:   cur.pathwayWeek   || "—"
+          activePathway: info.activePathway,
+          pathwayWeek:   info.pathwayWeek
         });
       }
     }
@@ -113,10 +162,12 @@
       color: colorForPercentLowerBetter(percent, CFG.THRESHOLDS.yrCum),
       breakdown: {
         yellows: yellows.map(function (s) {
-          return { client: s.client, activePathway: s.activePathway || "—", pathwayWeek: s.pathwayWeek || "—" };
+          var info = pathwayInfo(s);
+          return { client: s.client, activePathway: info.activePathway, pathwayWeek: info.pathwayWeek };
         }),
         reds: reds.map(function (s) {
-          return { client: s.client, activePathway: s.activePathway || "—", pathwayWeek: s.pathwayWeek || "—" };
+          var info = pathwayInfo(s);
+          return { client: s.client, activePathway: info.activePathway, pathwayWeek: info.pathwayWeek };
         })
       }
     };
@@ -132,7 +183,7 @@
       if (bf && bf.active) {
         blacks.push({
           client:        s.client,
-          triggeredDate: bf.triggeredDate || bf.activatedDate || "—"
+          triggeredDate: bf.lastTriggeredAt || bf.triggeredDate || bf.activatedDate || "—"
         });
       }
     }
