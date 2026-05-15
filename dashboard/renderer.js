@@ -5,6 +5,15 @@
  * Phase 4A: All scorecard tiles + CA + CD are clickable, opening a side
  *           panel with the per-client breakdown. CB and CC are NOT
  *           clickable — their full state is already on the tile.
+ * Phase 4B.2:
+ *   - Removed .meeting-meta block (replaced by WeekNav above coach-header).
+ *   - Added #week-nav-container slot for WeekNav.mount.
+ *   - Fixed getWeekKey: meetingDate is already Wed 23:59:59.999, so the
+ *     weekKey is the Wed of that date (no -1 day shift).
+ *   - render() and renderCoachContent() accept options.loading for
+ *     skeleton tiles during week transitions.
+ *   - handleControlClick invalidates WeekCache for the active week after
+ *     a successful write.
  */
 (function (root) {
   "use strict";
@@ -21,12 +30,15 @@
       .replace(/"/g, "&quot;");
   }
 
-  /* ---------- Compute the week key (closing Wednesday) ---------- */
+  /**
+   * meetingDate is Wed 23:59:59.999 — weekKey is that same Wed formatted
+   * as YYYY-MM-DD. (Previously this subtracted 1 day, producing Tuesday
+   * weekKeys — bug fixed in 4B.2.)
+   */
   function getWeekKey(meetingDate) {
-    var wed = new Date(meetingDate.getTime() - 24 * 60 * 60 * 1000);
-    var y = wed.getFullYear();
-    var m = String(wed.getMonth() + 1).padStart(2, "0");
-    var d = String(wed.getDate()).padStart(2, "0");
+    var y = meetingDate.getFullYear();
+    var m = String(meetingDate.getMonth() + 1).padStart(2, "0");
+    var d = String(meetingDate.getDate()).padStart(2, "0");
     return y + "-" + m + "-" + d;
   }
 
@@ -64,6 +76,24 @@
     return !!(root.BreakdownPanel && root.BreakdownPanel.isClickable && root.BreakdownPanel.isClickable(metricKey));
   }
 
+  function renderLoadingTile(metricKey) {
+    var meta = CFG.METRICS[metricKey];
+    if (!meta) return "";
+    return (
+      '<div class="tile tile-loading" data-metric="' + metricKey + '">' +
+        '<div class="tile-header">' +
+          '<div class="tile-title">' + escapeHtml(meta.title) + '</div>' +
+          '<div class="tile-description">' + escapeHtml(meta.description) + '</div>' +
+        '</div>' +
+        '<div class="tile-value-block">' +
+          '<div class="tile-skeleton tile-skeleton-value"></div>' +
+          '<div class="tile-skeleton tile-skeleton-sub"></div>' +
+        '</div>' +
+        '<div class="tile-legend">' + escapeHtml(meta.legend) + '</div>' +
+      '</div>'
+    );
+  }
+
   function renderTile(metricKey, metricData, coach, weekKey) {
     var meta = CFG.METRICS[metricKey];
     if (!meta) return "";
@@ -71,7 +101,6 @@
     var color = metricData.color || "neutral";
     var clickable = isClickable(metricKey);
 
-    // CB and CC get interactive controls IN PLACE OF the big value
     var valueBlock;
     if (metricKey === "CB") {
       valueBlock =
@@ -118,9 +147,10 @@
     );
   }
 
-  function renderSection(sectionKey, coachMetrics, coach, weekKey) {
+  function renderSection(sectionKey, coachMetrics, coach, weekKey, loading) {
     var order = CFG.METRIC_ORDER[sectionKey];
     var tiles = order.map(function (key) {
+      if (loading) return renderLoadingTile(key);
       return renderTile(key, coachMetrics[key], coach, weekKey);
     }).join("");
 
@@ -133,66 +163,64 @@
     );
   }
 
-  function renderCoachTab(coach, allMetrics, weekKey) {
-    var m = allMetrics[coach];
-    if (!m) return '<div class="empty">No data for ' + escapeHtml(coach) + '</div>';
+  function renderCoachTab(coach, allMetrics, weekKey, loading) {
+    var m = loading ? {} : (allMetrics ? allMetrics[coach] : null);
+    if (!loading && !m) return '<div class="empty">No data for ' + escapeHtml(coach) + '</div>';
 
     return (
       '<div class="coach-tab" data-coach="' + escapeHtml(coach) + '">' +
         '<div class="coach-header">' +
           '<h1 class="coach-name">' + escapeHtml(coach) + '</h1>' +
         '</div>' +
-        renderSection("scorecard", m, coach, weekKey) +
-        renderSection("behaviors", m, coach, weekKey) +
+        renderSection("scorecard", m, coach, weekKey, loading) +
+        renderSection("behaviors", m, coach, weekKey, loading) +
       '</div>'
     );
   }
 
-  function formatLong(d) {
-    var months = ["January","February","March","April","May","June",
-                  "July","August","September","October","November","December"];
-    var days   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    return days[d.getDay()] + ", " + months[d.getMonth()] + " " + d.getDate() + " " + d.getFullYear();
-  }
-
-  function render(allMetrics, meetingDate, activeCoach) {
+  /**
+   * render(allMetrics, meetingDate, activeCoach, options)
+   *   options.loading: true → skeleton tiles. allMetrics may be null.
+   */
+  function render(allMetrics, meetingDate, activeCoach, options) {
     var main = document.getElementById("main");
     if (!main) return;
 
+    var loading = !!(options && options.loading);
     var weekKey = getWeekKey(meetingDate);
-    var coachContent = renderCoachTab(activeCoach, allMetrics, weekKey);
-
-    var meetingStr = formatLong(meetingDate);
-    var weekEndStr = formatLong(new Date(meetingDate.getTime() - 24*60*60*1000));
+    var coachContent = renderCoachTab(activeCoach, allMetrics, weekKey, loading);
 
     main.innerHTML =
-      '<div class="meeting-meta">Meeting day: <strong>' + escapeHtml(meetingStr) +
-      '</strong>  ·  Closed coaching week ended ' + escapeHtml(weekEndStr) +
-      '</div>' +
+      '<div id="week-nav-container"></div>' +
       '<div id="coach-content">' + coachContent + '</div>';
 
-    wireControls(allMetrics, meetingDate);
-    wireBreakdownClicks();
+    if (!loading) {
+      wireControls(allMetrics, meetingDate);
+      wireBreakdownClicks();
+    }
   }
 
-  function renderCoachContent(allMetrics, coach, meetingDate) {
+  /**
+   * renderCoachContent(allMetrics, coach, meetingDate, options)
+   *   options.loading: true → skeleton tiles.
+   */
+  function renderCoachContent(allMetrics, coach, meetingDate, options) {
     var container = document.getElementById("coach-content");
     if (!container) return;
+    var loading = !!(options && options.loading);
     var weekKey = getWeekKey(meetingDate);
-    container.innerHTML = renderCoachTab(coach, allMetrics, weekKey);
-    wireControls(allMetrics, meetingDate);
-    wireBreakdownClicks();
+    container.innerHTML = renderCoachTab(coach, allMetrics, weekKey, loading);
+    if (!loading) {
+      wireControls(allMetrics, meetingDate);
+      wireBreakdownClicks();
+    }
   }
 
-  /* ---------- Wire CB/CC controls (Phase 3B) ---------- */
+  /* ---------- Wire CB/CC controls ---------- */
 
   function wireControls(allMetrics, meetingDate) {
     var groups = document.querySelectorAll(".tile-controls");
     groups.forEach(function (group) {
-      // Don't let control clicks bubble to the tile (which would open the
-      // breakdown panel for CB/CC if they were clickable — they aren't,
-      // but this is defense-in-depth and matters if we ever make them
-      // clickable for historical-week mode).
       group.addEventListener("click", function (e) { e.stopPropagation(); });
 
       var control = group.getAttribute("data-control");
@@ -209,7 +237,7 @@
     });
   }
 
-  /* ---------- Wire breakdown clicks (Phase 4A) ---------- */
+  /* ---------- Wire breakdown clicks ---------- */
 
   function wireBreakdownClicks() {
     if (!root.BreakdownPanel) return;
@@ -238,7 +266,6 @@
     if (control === "cb") fields.cb = value;
     if (control === "cc") fields.cc = value;
 
-    // Optimistic UI: mark this button active, others in group inactive
     var group = btnEl.parentNode;
     Array.prototype.forEach.call(group.querySelectorAll(".ctrl-btn"), function (b) {
       b.classList.remove("ctrl-active", "ctrl-active-green", "ctrl-active-yellow", "ctrl-active-red");
@@ -250,7 +277,6 @@
     else if (value === "No" || value === "Missed") activeClass += " ctrl-active-red";
     btnEl.classList.add.apply(btnEl.classList, activeClass.split(" "));
 
-    // Fire-and-forget the write
     root.ManualInputs.setCB_CC(week, coach, fields)
       .then(function () {
         Array.prototype.forEach.call(group.querySelectorAll(".ctrl-btn"), function (b) {
@@ -263,6 +289,9 @@
             (value === "Yes" || value === "Done")      ? "green"  :
             (value === "Pending")                       ? "yellow" :
             (value === "No"  || value === "Missed")     ? "red"    : "neutral";
+        }
+        if (root.WeekCache && root.WeekCache.invalidate) {
+          root.WeekCache.invalidate(meetingDate);
         }
       })
       .catch(function (err) {
