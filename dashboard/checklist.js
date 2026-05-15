@@ -1,5 +1,15 @@
 /**
  * Coach Pulse Dashboard — Behavior Checklist (CA, CB, CC)
+ *
+ * CA fix: Form Responses has columns:
+ *   A: Timestamp
+ *   B: Client (NOT coach — this is the client the form is about)
+ *   C: Exempt
+ *   D: Justification
+ *   ...
+ *
+ * To attribute a form to a coach, we look up the client in the roster
+ * and use that client's assigned coach.
  */
 (function (root) {
   "use strict";
@@ -24,25 +34,32 @@
     return y + "-" + m + "-" + d;
   }
 
-  /* ---------- CA: Form Submission Rate ---------- */
+  /* ---------- Form Responses column positions ---------- */
 
   var FR_COL_TIMESTAMP = 0;
-  var FR_COL_COACH     = 1;
-  var FR_COL_CLIENT    = 2;
+  var FR_COL_CLIENT    = 1;  // confirmed via inspection of actual sheet headers
 
-  function buildCA(coach, formResponses, rosterCount, window) {
+  /* ---------- CA: Form Submission Rate ---------- */
+  /*
+   * Counts unique clients (per coach) for whom a Minimum Standards form
+   * was submitted during the closed coaching week.
+   *
+   * Coach is derived by looking up the client in the roster map.
+   */
+  function buildCA(coach, formResponses, clientToCoach, rosterCount, window) {
     var submitted = {};
 
     for (var i = 1; i < formResponses.length; i++) {
       var row = formResponses[i];
       if (!row || !row[FR_COL_TIMESTAMP]) continue;
-      var rowCoach = (row[FR_COL_COACH] || "").trim();
-      if (rowCoach !== coach) continue;
       var ts = helpers.parseDateLoose(row[FR_COL_TIMESTAMP]);
       if (!ts) continue;
       if (ts < window.start || ts > window.end) continue;
       var client = (row[FR_COL_CLIENT] || "").trim();
-      if (client) submitted[client] = ts;
+      if (!client) continue;
+      var assignedCoach = clientToCoach[client];
+      if (assignedCoach !== coach) continue;
+      submitted[client] = ts;
     }
 
     var submittedCount = Object.keys(submitted).length;
@@ -158,6 +175,14 @@
     var window  = getCoachingWeekWindow(meetingDate);
     var weekKey = ymdET(window.end);
 
+    // Build client → coach map from roster
+    var clientToCoach = {};
+    for (var r = 0; r < data.roster.length; r++) {
+      var entry = data.roster[r];
+      if (entry.client) clientToCoach[entry.client] = entry.coach;
+    }
+
+    // Active clients per coach (from engine states, already excludes inactive)
     var clientsByCoach = {};
     for (var i = 0; i < CFG.COACHES.length; i++) clientsByCoach[CFG.COACHES[i]] = [];
     for (var j = 0; j < states.current.length; j++) {
@@ -165,11 +190,29 @@
       if (clientsByCoach[s.coach]) clientsByCoach[s.coach].push(s.client);
     }
 
+    // Diagnostic: log forms whose client isn't in roster (typos, deactivated clients, etc.)
+    var unmatched = {};
+    for (var f = 1; f < data.formResponses.length; f++) {
+      var row = data.formResponses[f];
+      if (!row || !row[FR_COL_TIMESTAMP]) continue;
+      var ts = helpers.parseDateLoose(row[FR_COL_TIMESTAMP]);
+      if (!ts) continue;
+      if (ts < window.start || ts > window.end) continue;
+      var clientName = (row[FR_COL_CLIENT] || "").trim();
+      if (!clientName) continue;
+      if (!clientToCoach[clientName]) {
+        unmatched[clientName] = (unmatched[clientName] || 0) + 1;
+      }
+    }
+    if (Object.keys(unmatched).length > 0 && root.console && root.console.warn) {
+      root.console.warn("[CA] Forms in window with unmatched client names:", unmatched);
+    }
+
     var out = {};
     for (var k = 0; k < CFG.COACHES.length; k++) {
       var c = CFG.COACHES[k];
       var entry = findManualEntry(data.manualCB_CC, weekKey, c);
-      var ca = buildCA(c, data.formResponses, clientsByCoach[c].length, window);
+      var ca = buildCA(c, data.formResponses, clientToCoach, clientsByCoach[c].length, window);
       fillNonSubmitters(ca, clientsByCoach[c], data.formResponses);
 
       out[c] = {
