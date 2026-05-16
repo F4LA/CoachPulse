@@ -3,19 +3,11 @@
  *
  * Parallel-fetches all source sheets via the Google Sheets API (v4) and
  * normalizes the responses into JS arrays / objects ready for downstream
- * modules. Returns:
+ * modules.
  *
- *   {
- *     roster:        [{ firstName, lastName, email, program, contractStart, coach, endDate, client }, ...],
- *     formResponses: [[row]...] raw rows,
- *     hcActions:     [[row]...] raw rows,
- *     masterSheet:   [{ firstName, lastName, email, coach, newEndDate, resign, raw }, ...],
- *     manualCB_CC:   [{ weekEndingWed, coach, cb, cc, lastUpdated }, ...],
- *     manualCD:      [{ weekEndingWed, coach, clientName, endDate, status }, ...]
- *   }
- *
- * Engine consumers (formResponses, hcActions) are passed through as raw rows
- * because the engine expects that shape (matches Flag System pattern).
+ * Phase 4B.2 fix: masterSheet now includes a `refund` boolean derived
+ * from column Y ("14 Days Refund?"). A refunded client is treated as if
+ * they don't exist for retention purposes (excluded from S4 entirely).
  */
 (function (root) {
   "use strict";
@@ -24,6 +16,11 @@
   if (!CFG) throw new Error("sheets-reader: CoachPulseConfig not loaded");
 
   var BASE = "https://sheets.googleapis.com/v4/spreadsheets";
+
+  // Column Y = index 24 (A=0). Fallback if CFG.MASTER_COLS.REFUND missing.
+  var REFUND_COL = (CFG.MASTER_COLS && typeof CFG.MASTER_COLS.REFUND === "number")
+    ? CFG.MASTER_COLS.REFUND
+    : 24;
 
   function buildUrl(sheetId, tab, range) {
     var r = range ? "!" + range : "";
@@ -47,11 +44,22 @@
       });
   }
 
+  /**
+   * Interpret a cell value as a boolean for refund/checkbox columns.
+   * Sheets API returns checkbox columns as the string "TRUE" / "FALSE",
+   * or as boolean true/false depending on the value's type. Empty cells
+   * may be undefined/empty string.
+   */
+  function isTruthy(v) {
+    if (v === true) return true;
+    if (v === false || v == null || v === "") return false;
+    var s = String(v).trim().toLowerCase();
+    return s === "true" || s === "yes" || s === "1" || s === "x";
+  }
+
   /* ---------- Parsers ---------- */
 
   function parseRoster(rows) {
-    // Roster tab has header row at index 0:
-    // First Name | Last Name | Email | Program | Contract Start | Coach | End Date
     if (!rows.length) return [];
     var out = [];
     for (var i = 1; i < rows.length; i++) {
@@ -67,7 +75,6 @@
         contractStart: r[4] || "",
         coach:         (r[5] || "").trim(),
         endDate:       r[6] || "",
-        // 'client' field is the format the engine expects: "First Last"
         client:        (firstName + " " + lastName).trim()
       });
     }
@@ -75,7 +82,6 @@
   }
 
   function parseMasterSheet(rows) {
-    // Master Sheet — has its own header; we only use specific columns.
     if (!rows.length) return [];
     var C = CFG.MASTER_COLS;
     var out = [];
@@ -89,6 +95,7 @@
         coach:      (r[C.COACH]      || "").trim(),
         newEndDate: r[C.NEW_END_DATE] || "",
         resign:     (r[C.RESIGN]     || "").trim(),
+        refund:     isTruthy(r[REFUND_COL]),
         raw:        r
       });
     }
@@ -96,7 +103,6 @@
   }
 
   function parseManualCB_CC(rows) {
-    // Header: Week_Ending_Wed | Coach | CB_Community_Post | CC_Client_Win_Shoutout | Last_Updated
     if (!rows.length) return [];
     var out = [];
     for (var i = 1; i < rows.length; i++) {
@@ -114,7 +120,6 @@
   }
 
   function parseManualCD(rows) {
-    // Header: Week_Ending_Wed | Coach | Client_Name | End_Date | Status
     if (!rows.length) return [];
     var out = [];
     for (var i = 1; i < rows.length; i++) {
@@ -146,8 +151,8 @@
     ]).then(function (results) {
       return {
         roster:        parseRoster(results[0]),
-        formResponses: results[1],          // raw rows for engine
-        hcActions:     results[2],          // raw rows for engine
+        formResponses: results[1],
+        hcActions:     results[2],
         masterSheet:   parseMasterSheet(results[3]),
         manualCB_CC:   parseManualCB_CC(results[4]),
         manualCD:      parseManualCD(results[5])
