@@ -397,6 +397,11 @@
     .hist-dot-yellow { background: var(--yellow); }
     .hist-dot-red    { background: var(--red); }
 
+    /* ---------- Read-only view (Phase 4C) ---------- */
+    body.readonly-mode #tab-container {
+      display: none;
+    }
+
     /* ---------- Responsive (Phase 4B.2) ---------- */
     @media (max-width: 540px) {
       .week-nav { gap: 10px; padding: 12px 0 4px; }
