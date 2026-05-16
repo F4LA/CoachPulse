@@ -174,6 +174,7 @@
         '</div>' +
         renderSection("scorecard", m, coach, weekKey, loading) +
         renderSection("behaviors", m, coach, weekKey, loading) +
+        '<div id="historical-container"></div>' +
       '</div>'
     );
   }
@@ -197,6 +198,9 @@
     if (!loading) {
       wireControls(allMetrics, meetingDate);
       wireBreakdownClicks();
+      if (root.HistoricalTable && typeof root.HistoricalTable.mount === "function") {
+        root.HistoricalTable.mount(activeCoach, meetingDate);
+      }
     }
   }
 
@@ -213,6 +217,9 @@
     if (!loading) {
       wireControls(allMetrics, meetingDate);
       wireBreakdownClicks();
+      if (root.HistoricalTable && typeof root.HistoricalTable.mount === "function") {
+        root.HistoricalTable.mount(coach, meetingDate);
+      }
     }
   }
 
