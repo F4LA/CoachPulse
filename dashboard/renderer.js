@@ -99,27 +99,49 @@
     if (!meta) return "";
 
     var color = metricData.color || "neutral";
+    var readOnly = !!root.CoachPulseReadOnly;
+    // In read-only mode breakdown panels remain clickable (info only).
     var clickable = isClickable(metricKey);
 
     var valueBlock;
     if (metricKey === "CB") {
-      valueBlock =
-        '<div class="tile-value-block tile-value-block-controls">' +
-          '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
-          renderControlsCB(coach, metricData.value, weekKey) +
-          (metricData.subDisplay
-            ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-            : '') +
-        '</div>';
+      if (readOnly) {
+        valueBlock =
+          '<div class="tile-value-block">' +
+            '<div class="tile-value">' + escapeHtml(metricData.displayString) + '</div>' +
+            (metricData.subDisplay
+              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
+              : '') +
+          '</div>';
+      } else {
+        valueBlock =
+          '<div class="tile-value-block tile-value-block-controls">' +
+            '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
+            renderControlsCB(coach, metricData.value, weekKey) +
+            (metricData.subDisplay
+              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
+              : '') +
+          '</div>';
+      }
     } else if (metricKey === "CC") {
-      valueBlock =
-        '<div class="tile-value-block tile-value-block-controls">' +
-          '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
-          renderControlsCC(coach, metricData.value, weekKey) +
-          (metricData.subDisplay
-            ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-            : '') +
-        '</div>';
+      if (readOnly) {
+        valueBlock =
+          '<div class="tile-value-block">' +
+            '<div class="tile-value">' + escapeHtml(metricData.displayString) + '</div>' +
+            (metricData.subDisplay
+              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
+              : '') +
+          '</div>';
+      } else {
+        valueBlock =
+          '<div class="tile-value-block tile-value-block-controls">' +
+            '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
+            renderControlsCC(coach, metricData.value, weekKey) +
+            (metricData.subDisplay
+              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
+              : '') +
+          '</div>';
+      }
     } else {
       valueBlock =
         '<div class="tile-value-block">' +
