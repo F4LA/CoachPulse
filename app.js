@@ -21,6 +21,32 @@
   var activeCoach = null;
   var currentMetrics = null;
   var currentMeetingDate = null;
+  var isReadOnly = false;
+  var lockedCoach = null;
+
+  // ----- URL parsing -----
+
+  /**
+   * Returns the coach name from ?coach=X (case-insensitive match against
+   * CFG.COACHES). Returns null if no param or invalid coach (silent
+   * fallback to normal multi-tab view).
+   */
+  function parseCoachFromUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var raw = params.get("coach");
+      if (!raw) return null;
+      var lower = raw.toLowerCase();
+      for (var i = 0; i < CFG.COACHES.length; i++) {
+        if (CFG.COACHES[i].toLowerCase() === lower) {
+          return CFG.COACHES[i];
+        }
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
+  }
 
   // ----- Default meeting date (ET-anchored) -----
 
@@ -146,6 +172,7 @@
    * rerenders the coach content for the current week.
    */
   function switchCoach(coach) {
+    if (isReadOnly) return; // Locked to a single coach.
     if (!coach || coach === activeCoach) return;
     activeCoach = coach;
     root.Tabs.setActiveTab(coach);
@@ -177,7 +204,9 @@
 
         currentMetrics = metrics;
         root.Renderer.renderCoachContent(metrics, activeCoach, newMeetingDate);
-        root.Tabs.updateTabStrip(metrics, activeCoach);
+        if (!isReadOnly) {
+          root.Tabs.updateTabStrip(metrics, activeCoach);
+        }
       })
       .catch(function (err) {
         console.error("[CoachPulse] Week change error:", err);
@@ -201,6 +230,15 @@
 
     var meetingDate = getDefaultMeetingDate();
     console.log("[CoachPulse] Default meeting date (Wed end ET):", meetingDate.toString());
+
+    // ----- Read-only URL view -----
+    lockedCoach = parseCoachFromUrl();
+    isReadOnly = !!lockedCoach;
+    root.CoachPulseReadOnly = isReadOnly;
+    if (isReadOnly) {
+      console.log("[CoachPulse] Read-only view for coach:", lockedCoach);
+      document.body.classList.add("readonly-mode");
+    }
 
     root.SheetsReader.loadAll()
       .then(function (data) {
@@ -227,7 +265,7 @@
         // Stash state.
         currentMetrics = metrics;
         currentMeetingDate = meetingDate;
-        activeCoach = root.Tabs.sortCoaches(metrics)[0];
+        activeCoach = isReadOnly ? lockedCoach : root.Tabs.sortCoaches(metrics)[0];
 
         root.__cpMetrics = metrics;
         root.__cpMeetingDate = meetingDate;
@@ -236,11 +274,13 @@
         hideStatus();
 
         // Order matters:
-        // 1) Tabs first (renders #tab-container only).
+        // 1) Tabs first (renders #tab-container only) — SKIPPED in read-only.
         // 2) Renderer.render (renders #week-nav-container slot + content).
         // 3) WeekNav.mount (fills the slot).
         // 4) Subscribe to week changes.
-        root.Tabs.mountTabs(metrics, meetingDate, activeCoach);
+        if (!isReadOnly) {
+          root.Tabs.mountTabs(metrics, meetingDate, activeCoach);
+        }
         root.Renderer.render(metrics, meetingDate, activeCoach);
         root.WeekNav.mount(meetingDate);
         root.WeekNav.onWeekChange(handleWeekChange);
