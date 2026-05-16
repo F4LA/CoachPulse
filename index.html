@@ -307,10 +307,103 @@
       75% { transform: translateX(3px); }
     }
 
+    /* ---------- Historical Table (Phase 4B.3) ---------- */
+    .historical-section { margin-top: 40px; }
+    .historical-table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow-x: auto;
+    }
+    .historical-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .historical-table thead th {
+      background: var(--surface-2);
+      color: var(--text-faint);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .historical-table thead th.hist-col-metric {
+      text-align: left;
+    }
+    .historical-table tbody tr.historical-row {
+      cursor: pointer;
+      transition: background-color 100ms ease;
+      border-bottom: 1px solid var(--border);
+    }
+    .historical-table tbody tr.historical-row:last-child {
+      border-bottom: none;
+    }
+    .historical-table tbody tr.historical-row:hover {
+      background: var(--steel-tint);
+    }
+    .historical-table tbody tr.historical-row:focus {
+      outline: none;
+      background: var(--steel-tint);
+      box-shadow: inset 0 0 0 2px var(--steel-400);
+    }
+    .historical-table tbody tr.historical-row:focus:not(:focus-visible) {
+      box-shadow: none;
+    }
+    .historical-table tbody tr.historical-row-active {
+      background: var(--steel-tint);
+      box-shadow: inset 3px 0 0 0 var(--navy-900);
+    }
+    .historical-table tbody tr.historical-row-active:hover {
+      background: var(--steel-tint);
+    }
+    .historical-table td {
+      padding: 12px 14px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .historical-table td.hist-col-week {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .historical-table td.hist-col-metric {
+      color: var(--text-muted);
+    }
+    .hist-cell-value {
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .hist-cell-loading {
+      color: var(--text-faint);
+      font-weight: 500;
+    }
+    .hist-cell-empty {
+      color: var(--text-faint);
+    }
+    .hist-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .hist-dot-green  { background: var(--green); }
+    .hist-dot-yellow { background: var(--yellow); }
+    .hist-dot-red    { background: var(--red); }
+
     /* ---------- Responsive (Phase 4B.2) ---------- */
     @media (max-width: 540px) {
       .week-nav { gap: 10px; padding: 12px 0 4px; }
       .week-nav-label { min-width: 0; font-size: 13px; }
+      .historical-table { font-size: 12px; }
+      .historical-table td,
+      .historical-table thead th { padding: 8px 10px; }
     }
   </style>
 </head>
@@ -353,6 +446,7 @@
   <script src="dashboard/week-nav.js"></script>
   <script src="dashboard/renderer.js"></script>
   <script src="dashboard/tabs.js"></script>
+  <script src="dashboard/historical-table.js"></script>
   <script src="app.js"></script>
 
 </body>
