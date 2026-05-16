@@ -28,12 +28,13 @@
 
     /* ---------- Master Sheet columns (0-indexed) ---------- */
     MASTER_COLS: {
-      FIRST_NAME:    0,
-      LAST_NAME:     1,
-      EMAIL:         2,
-      COACH:         9,
-      NEW_END_DATE: 17,
-      RESIGN:       19
+      FIRST_NAME:    0,   // A
+      LAST_NAME:     1,   // B
+      EMAIL:         2,   // C
+      COACH:         9,   // J
+      NEW_END_DATE: 17,   // R
+      RESIGN:       19,   // T  ("Resign?" — Yes means client re-signed/renewed)
+      REFUND:       24    // Y  ("14 Days Refund?" — TRUE means refunded; excluded from retention)
     },
 
     /* ---------- Engine pinning ---------- */
