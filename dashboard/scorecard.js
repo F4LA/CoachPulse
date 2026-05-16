@@ -1,9 +1,14 @@
 /**
  * Coach Pulse Dashboard — Scorecard (S1–S4)
  *
- * Phase 4B.2 fix: meetingDate is Wed 23:59:59.999 ET (post 4B.1). S4's
- * "Renewals Last Week" window is the Thu-Wed coaching week ending ON
- * meetingDate, not meetingDate - 1.
+ * Phase 4B.2 fixes for S4 (Renewals Last Week):
+ *   1. meetingDate is Wed 23:59:59.999 — no -1 day shift.
+ *   2. Refunded clients (col Y = TRUE) are excluded entirely — they don't
+ *      appear in the panel and don't count in either numerator or denominator.
+ *   3. "Resign?" = Yes means the client renewed (re-signed). The previous
+ *      code counted Resign=No as renewed, which was inverted.
+ *      Now: numerator counts Resign=Yes, denominator counts all
+ *      non-refunded contracts whose end date falls in the Thu-Wed window.
  */
 (function (root) {
   "use strict";
@@ -183,10 +188,15 @@
     };
   }
 
-  /* ---------- S4: Renewals Last Week ---------- */
-  /*
-   * meetingDate is Wed 23:59:59.999. The Thu-Wed coaching week ends ON
-   * meetingDate. Scan contracts whose newEndDate falls in [Thu, Wed].
+  /* ---------- S4: Renewals Last Week ----------
+   *
+   * Scans masterSheet for rows where:
+   *   - coach matches
+   *   - newEndDate (col R) falls in [weekStart, weekEnd] = Thu-Wed window
+   *   - refund (col Y) is NOT true
+   *
+   * Numerator: # of those with Resign? = "Yes" (re-signed = renewed)
+   * Denominator: total non-refunded contracts in window
    */
   function buildS4(coach, masterSheet, meetingDate) {
     var weekEnd = new Date(meetingDate.getTime());
@@ -198,6 +208,7 @@
     for (var i = 0; i < masterSheet.length; i++) {
       var r = masterSheet[i];
       if (r.coach !== coach) continue;
+      if (r.refund) continue;  // refunded clients excluded entirely
       var end = parseDateLoose(r.newEndDate);
       if (!end) continue;
       if (end >= weekStart && end <= weekEnd) {
@@ -209,21 +220,16 @@
       }
     }
 
-    var X = 0, Y = 0;
+    var Y = inWindow.length;  // denominator: all non-refunded contracts in window
+    var X = 0;                // numerator: those that renewed (Resign=Yes)
     for (var j = 0; j < inWindow.length; j++) {
-      var resign = (inWindow[j].resign || "").trim();
-      if (resign === "") continue;
-      Y++;
-      if (resign.toLowerCase() === "no") X++;
+      if ((inWindow[j].resign || "").trim().toLowerCase() === "yes") X++;
     }
 
     var display, sub;
-    if (inWindow.length === 0) {
+    if (Y === 0) {
       display = "—";
       sub = "no contracts";
-    } else if (Y === 0) {
-      display = "0/0";
-      sub = "no decisions yet";
     } else {
       display = X + "/" + Y;
       sub = fmtPct(pct(X, Y)) + " renewed";
