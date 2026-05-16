@@ -29,6 +29,16 @@
   if (!CFG) throw new Error("historical-table: CoachPulseConfig not loaded");
 
   var METRIC_KEYS = ["S1", "S2", "S3", "S4", "CA", "CB", "CC", "CD"];
+  var METRIC_LABELS = {
+    S1: "New Red Flags",
+    S2: "Yellow/Red Cum.",
+    S3: "Black-Flagged",
+    S4: "Renewals LW",
+    CA: "Form Submission",
+    CB: "Community Post",
+    CC: "Win Shoutout",
+    CD: "Renewals Next 2W"
+  };
   var TOTAL_ROWS  = 8; // current + 7 historical
 
   // Incremented on every mount() so async resolvers can detect staleness.
@@ -121,7 +131,9 @@
     var headerCells =
       '<th class="hist-col-week">Week ending</th>';
     for (var i = 0; i < METRIC_KEYS.length; i++) {
-      headerCells += '<th class="hist-col-metric">' + METRIC_KEYS[i] + '</th>';
+      headerCells += '<th class="hist-col-metric">' +
+                       escapeHtml(METRIC_LABELS[METRIC_KEYS[i]]) +
+                     '</th>';
     }
 
     var rows = weekDates.map(function (d) {
