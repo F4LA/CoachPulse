@@ -832,3 +832,82 @@ button { font-family: inherit; }
     width: 100%;
   }
 }
+
+/* =====================================================================
+   Phase 4B.3 — Tile controls (CB / CC / Vacation)
+   ===================================================================== */
+
+.tile-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0 2px;
+}
+
+.ctrl-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 120ms ease;
+  letter-spacing: 0.01em;
+}
+.ctrl-btn:hover:not(:disabled) {
+  border-color: var(--steel-400);
+  color: var(--steel-700);
+  background: var(--steel-tint);
+}
+.ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Active states */
+.ctrl-btn.ctrl-active {
+  font-weight: 600;
+  color: #fff;
+  border-color: transparent;
+}
+.ctrl-btn.ctrl-active-green {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.ctrl-btn.ctrl-active-yellow {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: #fff;
+}
+.ctrl-btn.ctrl-active-red {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.ctrl-btn.ctrl-active-vacation {
+  background: var(--steel-600);
+  border-color: var(--steel-600);
+  color: #fff;
+}
+
+/* Saving / error states */
+.ctrl-btn.ctrl-saving {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.ctrl-btn.ctrl-error {
+  background: var(--red-bg);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* Vacation button — subtle distinction */
+.ctrl-btn.ctrl-btn-vacation {
+  border-style: dashed;
+}
+.ctrl-btn.ctrl-btn-vacation.ctrl-active-vacation {
+  border-style: solid;
+}
