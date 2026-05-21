@@ -14,6 +14,14 @@
  *     skeleton tiles during week transitions.
  *   - handleControlClick invalidates WeekCache for the active week after
  *     a successful write.
+ * Phase 4B.3 — Vacation support:
+ *   - CB tile gains a "Vacation" button alongside Yes/No.
+ *   - When vacation=true (CA or CB breakdown has vacation:true), the CB
+ *     tile shows Yes/No disabled and Vacation active, and CA tile shows
+ *     "—" with "On vacation" sub-display (handled by checklist.js output,
+ *     no special rendering needed here).
+ *   - Clicking Vacation writes vacation:"Yes" to the sheet via ManualInputs.
+ *     Clicking Yes or No clears vacation (writes vacation:"").
  */
 (function (root) {
   "use strict";
@@ -44,15 +52,20 @@
 
   /* ---------- Tile renderers ---------- */
 
-  function renderControlsCB(coach, currentValue, weekKey) {
+  function renderControlsCB(coach, currentValue, weekKey, isVacation) {
     var v = (currentValue || "").toLowerCase();
-    var yesActive = v === "yes" ? " ctrl-active ctrl-active-green" : "";
-    var noActive  = v === "no"  ? " ctrl-active ctrl-active-red"   : "";
+    var yesActive  = (!isVacation && v === "yes") ? " ctrl-active ctrl-active-green"   : "";
+    var noActive   = (!isVacation && v === "no")  ? " ctrl-active ctrl-active-red"     : "";
+    var vacActive  = isVacation                   ? " ctrl-active ctrl-active-vacation" : "";
+    // Yes and No are disabled when vacation is active.
+    var disabledAttr = isVacation ? ' disabled' : '';
+
     return (
       '<div class="tile-controls" data-control="cb" data-coach="' + escapeHtml(coach) +
       '" data-week="' + escapeHtml(weekKey) + '">' +
-        '<button class="ctrl-btn' + yesActive + '" data-value="Yes">Yes</button>' +
-        '<button class="ctrl-btn' + noActive  + '" data-value="No">No</button>' +
+        '<button class="ctrl-btn' + yesActive + '"' + disabledAttr + ' data-value="Yes">Yes</button>' +
+        '<button class="ctrl-btn' + noActive  + '"' + disabledAttr + ' data-value="No">No</button>' +
+        '<button class="ctrl-btn ctrl-btn-vacation' + vacActive + '" data-value="Vacation">Vacation</button>' +
       '</div>'
     );
   }
@@ -100,8 +113,10 @@
 
     var color = metricData.color || "neutral";
     var readOnly = !!root.CoachPulseReadOnly;
-    // In read-only mode breakdown panels remain clickable (info only).
     var clickable = isClickable(metricKey);
+
+    // Detect vacation state from CB or CA breakdown.
+    var isVacation = !!(metricData.breakdown && metricData.breakdown.vacation);
 
     var valueBlock;
     if (metricKey === "CB") {
@@ -117,7 +132,7 @@
         valueBlock =
           '<div class="tile-value-block tile-value-block-controls">' +
             '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
-            renderControlsCB(coach, metricData.value, weekKey) +
+            renderControlsCB(coach, metricData.value, weekKey, isVacation) +
             (metricData.subDisplay
               ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
               : '') +
@@ -259,6 +274,7 @@
       buttons.forEach(function (btn) {
         btn.addEventListener("click", function (e) {
           e.stopPropagation();
+          if (btn.disabled) return;
           var value = e.currentTarget.getAttribute("data-value");
           handleControlClick(control, coach, week, value, allMetrics, meetingDate, e.currentTarget);
         });
@@ -292,18 +308,36 @@
 
   function handleControlClick(control, coach, week, value, allMetrics, meetingDate, btnEl) {
     var fields = {};
-    if (control === "cb") fields.cb = value;
-    if (control === "cc") fields.cc = value;
+
+    if (control === "cb") {
+      if (value === "Vacation") {
+        // Mark vacation — clear CB value, set vacation flag.
+        fields.cb       = "";
+        fields.vacation = "Yes";
+      } else {
+        // Yes or No — set CB value, clear vacation flag.
+        fields.cb       = value;
+        fields.vacation = "";
+      }
+    }
+    if (control === "cc") {
+      fields.cc = value;
+    }
 
     var group = btnEl.parentNode;
     Array.prototype.forEach.call(group.querySelectorAll(".ctrl-btn"), function (b) {
-      b.classList.remove("ctrl-active", "ctrl-active-green", "ctrl-active-yellow", "ctrl-active-red");
+      b.classList.remove(
+        "ctrl-active", "ctrl-active-green", "ctrl-active-yellow",
+        "ctrl-active-red", "ctrl-active-vacation"
+      );
       b.classList.add("ctrl-saving");
     });
+
     var activeClass = "ctrl-active";
-    if (value === "Yes" || value === "Done")    activeClass += " ctrl-active-green";
-    else if (value === "Pending")                activeClass += " ctrl-active-yellow";
-    else if (value === "No" || value === "Missed") activeClass += " ctrl-active-red";
+    if (value === "Yes" || value === "Done")       activeClass += " ctrl-active-green";
+    else if (value === "Pending")                   activeClass += " ctrl-active-yellow";
+    else if (value === "No" || value === "Missed")  activeClass += " ctrl-active-red";
+    else if (value === "Vacation")                  activeClass += " ctrl-active-vacation";
     btnEl.classList.add.apply(btnEl.classList, activeClass.split(" "));
 
     root.ManualInputs.setCB_CC(week, coach, fields)
@@ -311,14 +345,47 @@
         Array.prototype.forEach.call(group.querySelectorAll(".ctrl-btn"), function (b) {
           b.classList.remove("ctrl-saving");
         });
-        if (allMetrics[coach] && allMetrics[coach][control.toUpperCase()]) {
-          allMetrics[coach][control.toUpperCase()].value = value;
-          allMetrics[coach][control.toUpperCase()].displayString = value;
-          allMetrics[coach][control.toUpperCase()].color =
-            (value === "Yes" || value === "Done")      ? "green"  :
-            (value === "Pending")                       ? "yellow" :
-            (value === "No"  || value === "Missed")     ? "red"    : "neutral";
+
+        // Update in-memory metrics to reflect the new state.
+        if (allMetrics[coach]) {
+          var isVacation = (value === "Vacation");
+
+          if (control === "cb") {
+            allMetrics[coach].CB.value        = isVacation ? null : value;
+            allMetrics[coach].CB.displayString = isVacation ? "—" : value;
+            allMetrics[coach].CB.subDisplay    = isVacation ? "On vacation" : "";
+            allMetrics[coach].CB.color         = isVacation ? "neutral"
+              : (value === "Yes" ? "green" : "red");
+            if (!allMetrics[coach].CB.breakdown) allMetrics[coach].CB.breakdown = {};
+            allMetrics[coach].CB.breakdown.vacation = isVacation;
+
+            // Sync CA to match vacation state.
+            if (isVacation) {
+              allMetrics[coach].CA.value         = null;
+              allMetrics[coach].CA.displayString = "—";
+              allMetrics[coach].CA.subDisplay    = "On vacation";
+              allMetrics[coach].CA.color         = "neutral";
+              if (!allMetrics[coach].CA.breakdown) allMetrics[coach].CA.breakdown = {};
+              allMetrics[coach].CA.breakdown.vacation = true;
+            } else {
+              // CA will correct itself on next full data reload; for now just
+              // clear the vacation flag so it re-evaluates correctly.
+              if (allMetrics[coach].CA.breakdown) {
+                allMetrics[coach].CA.breakdown.vacation = false;
+              }
+            }
+          }
+
+          if (control === "cc") {
+            allMetrics[coach].CC.value        = value;
+            allMetrics[coach].CC.displayString = value;
+            allMetrics[coach].CC.color        =
+              (value === "Done")    ? "green"  :
+              (value === "Pending") ? "yellow" :
+              (value === "Missed")  ? "red"    : "neutral";
+          }
         }
+
         if (root.WeekCache && root.WeekCache.invalidate) {
           root.WeekCache.invalidate(meetingDate);
         }
