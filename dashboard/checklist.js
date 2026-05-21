@@ -13,6 +13,14 @@
  *
  * To attribute a form to a coach, we look up the client in the roster
  * and use that client's assigned coach.
+ *
+ * Phase 4B.3 — Vacation support:
+ *   When CB_CC_Inputs has Vacation=Yes for a (week, coach) entry:
+ *     - CA returns neutral / "—" / "On vacation"
+ *     - CB returns neutral / "—" / "On vacation"
+ *     - CC is unaffected (monthly obligation, should be scheduled before vacation)
+ *   The vacation flag is stored in the `vacation` field of the manual entry
+ *   (column E in CB_CC_Inputs, before Last_Updated which shifts to column F).
  */
 (function (root) {
   "use strict";
@@ -50,7 +58,18 @@
 
   /* ---------- CA: Form Submission Rate ---------- */
 
-  function buildCA(coach, formResponses, clientToCoach, rosterCount, window) {
+  function buildCA(coach, formResponses, clientToCoach, rosterCount, window, isVacation) {
+    // Vacation override — coach not working this week, metric does not apply.
+    if (isVacation) {
+      return {
+        value: null,
+        displayString: "—",
+        subDisplay: "On vacation",
+        color: "neutral",
+        breakdown: { submittedClientNames: [], nonSubmitters: [], vacation: true }
+      };
+    }
+
     var submitted = {};
 
     for (var i = 1; i < formResponses.length; i++) {
@@ -93,7 +112,18 @@
     return null;
   }
 
-  function buildCB(entry) {
+  function buildCB(entry, isVacation) {
+    // Vacation override — CB does not apply this week.
+    if (isVacation) {
+      return {
+        value: null,
+        displayString: "—",
+        subDisplay: "On vacation",
+        color: "neutral",
+        breakdown: { value: null, lastUpdated: null, vacation: true }
+      };
+    }
+
     if (!entry || !entry.cb) {
       return {
         value: null,
@@ -114,6 +144,7 @@
   }
 
   function buildCC(entry) {
+    // CC is not affected by vacation — monthly obligation.
     if (!entry || !entry.cc) {
       return {
         value: null,
@@ -140,6 +171,9 @@
   /* ---------- Non-submitters helper ---------- */
 
   function fillNonSubmitters(caResult, coachActiveClients, formResponses) {
+    // Skip when vacation — there are no submitters or non-submitters this week.
+    if (caResult.breakdown && caResult.breakdown.vacation) return caResult;
+
     var submittedSet = {};
     for (var i = 0; i < caResult.breakdown.submittedClientNames.length; i++) {
       submittedSet[caResult.breakdown.submittedClientNames[i]] = true;
@@ -171,6 +205,14 @@
 
     caResult.breakdown.nonSubmitters = nonSubs;
     return caResult;
+  }
+
+  /* ---------- Vacation helper ---------- */
+
+  function isCoachOnVacation(entry) {
+    if (!entry) return false;
+    var v = (entry.vacation || "").trim().toLowerCase();
+    return v === "yes";
   }
 
   /* ---------- Top-level ---------- */
@@ -215,14 +257,16 @@
     var out = {};
     for (var k = 0; k < CFG.COACHES.length; k++) {
       var c = CFG.COACHES[k];
-      var entry = findManualEntry(data.manualCB_CC, weekKey, c);
-      var ca = buildCA(c, data.formResponses, clientToCoach, clientsByCoach[c].length, window);
+      var manualEntry = findManualEntry(data.manualCB_CC, weekKey, c);
+      var vacation    = isCoachOnVacation(manualEntry);
+
+      var ca = buildCA(c, data.formResponses, clientToCoach, clientsByCoach[c].length, window, vacation);
       fillNonSubmitters(ca, clientsByCoach[c], data.formResponses);
 
       out[c] = {
         CA: ca,
-        CB: buildCB(entry),
-        CC: buildCC(entry)
+        CB: buildCB(manualEntry, vacation),
+        CC: buildCC(manualEntry)
       };
     }
     return out;
@@ -230,6 +274,10 @@
 
   root.Checklist = {
     compute: compute,
-    helpers: { getCoachingWeekWindow: getCoachingWeekWindow, ymdET: ymdET }
+    helpers: {
+      getCoachingWeekWindow: getCoachingWeekWindow,
+      ymdET: ymdET,
+      isCoachOnVacation: isCoachOnVacation
+    }
   };
 })(typeof window !== "undefined" ? window : this);
