@@ -386,6 +386,13 @@
           }
         }
 
+        // Re-render the coach content so tiles reflect the updated state
+        // immediately without requiring a tab switch.
+        if (root.CoachPulseApp && root.CoachPulseApp.getActiveCoach &&
+            root.CoachPulseApp.getActiveCoach() === coach) {
+          renderCoachContent(allMetrics, coach, meetingDate);
+        }
+
         if (root.WeekCache && root.WeekCache.invalidate) {
           root.WeekCache.invalidate(meetingDate);
         }
