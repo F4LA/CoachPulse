@@ -13,6 +13,12 @@
  * For a robust workflow we wrap in a Promise and resolve after the request
  * completes. UI optimistically updates the tile, then refreshes data to
  * confirm persistence.
+ *
+ * Phase 4B.3 — Vacation support:
+ *   setCB_CC now accepts an optional `vacation` field in `fields`.
+ *   The Apps Script handler must write it to the Vacation column (col E).
+ *   Passing vacation:"Yes" marks the week as vacation.
+ *   Passing vacation:"" clears it (coach clicked Yes or No to resume normal tracking).
  */
 (function (root) {
   "use strict";
@@ -33,17 +39,22 @@
   }
 
   /**
-   * Set Community Post or Client Win Shoutout for a (week, coach).
+   * Set Community Post, Client Win Shoutout, and/or Vacation flag for a (week, coach).
    * @param {string} weekEndingWed — "YYYY-MM-DD" of the closing Wednesday
    * @param {string} coach
-   * @param {Object} fields — { cb?: "Yes"|"No", cc?: "Done"|"Pending"|"Missed" }
+   * @param {Object} fields — {
+   *   cb?:       "Yes"|"No"|"",
+   *   cc?:       "Done"|"Pending"|"Missed"|"",
+   *   vacation?: "Yes"|""   ← NEW: "Yes" to mark vacation, "" to clear
+   * }
    */
   function setCB_CC(weekEndingWed, coach, fields) {
     return post("setCB_CC", {
       weekEndingWed: weekEndingWed,
       coach:         coach,
       cb:            fields.cb,
-      cc:            fields.cc
+      cc:            fields.cc,
+      vacation:      fields.vacation  // may be undefined — Apps Script handles gracefully
     });
   }
 
