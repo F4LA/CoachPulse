@@ -21,7 +21,7 @@
     API_KEY: "AIzaSyCbpE8CmLKpfmbMPLXkEmWe-5zEx53XyIg",
 
     /* ---------- Apps Script Web App (writes for CB/CC/CD) ---------- */
-    WEB_APP_URL: "https://script.google.com/macros/s/AKfycbyRh5mZqGOsmso9NUtta_lQ2GEfSAPQFyso0eC4CJodbqLxvantIaEGlUIT_tCD8Zv6qA/exec",
+    WEB_APP_URL: "https://script.google.com/macros/s/AKfycbygq7qnLWlqJybm8ApWQB-AeSMmch03H8Xslyr5sdGIqGzJBEvXm-pHwTma4RIvNxWb/exec",
 
     /* ---------- Coaches ---------- */
     COACHES: ["Brent", "Ceci", "Miguel", "Jackie"],
