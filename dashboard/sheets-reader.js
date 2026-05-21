@@ -7,7 +7,20 @@
  *
  * Phase 4B.2 fix: masterSheet now includes a `refund` boolean derived
  * from column Y ("14 Days Refund?"). A refunded client is treated as if
- * they don't exist for retention purposes (excluded from S4 entirely).
+ * they don't exist for retention purposes (excluded from S4 and CD entirely).
+ *
+ * Phase 4B.3 — Vacation support:
+ *   CB_CC_Inputs now has a `Vacation` column (col E, index 4).
+ *   Last_Updated shifts to col F (index 5).
+ *   parseManualCB_CC reads the vacation field and exposes it as `vacation`.
+ *
+ *   CB_CC_Inputs column layout (0-indexed):
+ *     0: Week_Ending_Wed
+ *     1: Coach
+ *     2: CB_Community_Post
+ *     3: CC_Client_Win_Shoutout
+ *     4: Vacation          ← NEW
+ *     5: Last_Updated      ← shifted from 4
  */
 (function (root) {
   "use strict";
@@ -45,7 +58,7 @@
   }
 
   /**
-   * Interpret a cell value as a boolean for refund/checkbox columns.
+   * Interpret a cell value as a boolean for refund/vacation/checkbox columns.
    * Sheets API returns checkbox columns as the string "TRUE" / "FALSE",
    * or as boolean true/false depending on the value's type. Empty cells
    * may be undefined/empty string.
@@ -102,6 +115,15 @@
     return out;
   }
 
+  /**
+   * CB_CC_Inputs column layout (0-indexed):
+   *   0: Week_Ending_Wed
+   *   1: Coach
+   *   2: CB_Community_Post
+   *   3: CC_Client_Win_Shoutout
+   *   4: Vacation          ("Yes" or blank)
+   *   5: Last_Updated
+   */
   function parseManualCB_CC(rows) {
     if (!rows.length) return [];
     var out = [];
@@ -113,7 +135,8 @@
         coach:         (r[1] || "").trim(),
         cb:            (r[2] || "").trim(),
         cc:            (r[3] || "").trim(),
-        lastUpdated:   r[4] || ""
+        vacation:      (r[4] || "").trim(),   // "Yes" or blank
+        lastUpdated:   r[5] || ""             // shifted from index 4
       });
     }
     return out;
