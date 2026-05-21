@@ -16,12 +16,10 @@
  *     a successful write.
  * Phase 4B.3 — Vacation support:
  *   - CB tile gains a "Vacation" button alongside Yes/No.
- *   - When vacation=true (CA or CB breakdown has vacation:true), the CB
- *     tile shows Yes/No disabled and Vacation active, and CA tile shows
- *     "—" with "On vacation" sub-display (handled by checklist.js output,
- *     no special rendering needed here).
- *   - Clicking Vacation writes vacation:"Yes" to the sheet via ManualInputs.
- *     Clicking Yes or No clears vacation (writes vacation:"").
+ *   - When vacation=true the CB tile shows Yes/No disabled and Vacation active.
+ *   - CA tile shows "—" / "On vacation" (handled by checklist.js output).
+ *   - DOM is patched in-place after clicks — NO full re-render to avoid
+ *     duplicate sheet rows caused by re-wiring controls mid-flight.
  */
 (function (root) {
   "use strict";
@@ -38,11 +36,6 @@
       .replace(/"/g, "&quot;");
   }
 
-  /**
-   * meetingDate is Wed 23:59:59.999 — weekKey is that same Wed formatted
-   * as YYYY-MM-DD. (Previously this subtracted 1 day, producing Tuesday
-   * weekKeys — bug fixed in 4B.2.)
-   */
   function getWeekKey(meetingDate) {
     var y = meetingDate.getFullYear();
     var m = String(meetingDate.getMonth() + 1).padStart(2, "0");
@@ -57,9 +50,7 @@
     var yesActive  = (!isVacation && v === "yes") ? " ctrl-active ctrl-active-green"   : "";
     var noActive   = (!isVacation && v === "no")  ? " ctrl-active ctrl-active-red"     : "";
     var vacActive  = isVacation                   ? " ctrl-active ctrl-active-vacation" : "";
-    // Yes and No are disabled when vacation is active.
     var disabledAttr = isVacation ? ' disabled' : '';
-
     return (
       '<div class="tile-controls" data-control="cb" data-coach="' + escapeHtml(coach) +
       '" data-week="' + escapeHtml(weekKey) + '">' +
@@ -114,8 +105,6 @@
     var color = metricData.color || "neutral";
     var readOnly = !!root.CoachPulseReadOnly;
     var clickable = isClickable(metricKey);
-
-    // Detect vacation state from CB or CA breakdown.
     var isVacation = !!(metricData.breakdown && metricData.breakdown.vacation);
 
     var valueBlock;
@@ -124,18 +113,14 @@
         valueBlock =
           '<div class="tile-value-block">' +
             '<div class="tile-value">' + escapeHtml(metricData.displayString) + '</div>' +
-            (metricData.subDisplay
-              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-              : '') +
+            (metricData.subDisplay ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>' : '') +
           '</div>';
       } else {
         valueBlock =
           '<div class="tile-value-block tile-value-block-controls">' +
             '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
             renderControlsCB(coach, metricData.value, weekKey, isVacation) +
-            (metricData.subDisplay
-              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-              : '') +
+            (metricData.subDisplay ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>' : '') +
           '</div>';
       }
     } else if (metricKey === "CC") {
@@ -143,27 +128,21 @@
         valueBlock =
           '<div class="tile-value-block">' +
             '<div class="tile-value">' + escapeHtml(metricData.displayString) + '</div>' +
-            (metricData.subDisplay
-              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-              : '') +
+            (metricData.subDisplay ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>' : '') +
           '</div>';
       } else {
         valueBlock =
           '<div class="tile-value-block tile-value-block-controls">' +
             '<div class="tile-current">' + escapeHtml(metricData.displayString) + '</div>' +
             renderControlsCC(coach, metricData.value, weekKey) +
-            (metricData.subDisplay
-              ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-              : '') +
+            (metricData.subDisplay ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>' : '') +
           '</div>';
       }
     } else {
       valueBlock =
         '<div class="tile-value-block">' +
           '<div class="tile-value">' + escapeHtml(metricData.displayString) + '</div>' +
-          (metricData.subDisplay
-            ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>'
-            : '') +
+          (metricData.subDisplay ? '<div class="tile-sub">' + escapeHtml(metricData.subDisplay) + '</div>' : '') +
         '</div>';
     }
 
@@ -190,7 +169,6 @@
       if (loading) return renderLoadingTile(key);
       return renderTile(key, coachMetrics[key], coach, weekKey);
     }).join("");
-
     var sectionTitle = sectionKey === "scorecard" ? "Scorecard" : "Behaviors";
     return (
       '<section class="metric-section" data-section="' + sectionKey + '">' +
@@ -203,7 +181,6 @@
   function renderCoachTab(coach, allMetrics, weekKey, loading) {
     var m = loading ? {} : (allMetrics ? allMetrics[coach] : null);
     if (!loading && !m) return '<div class="empty">No data for ' + escapeHtml(coach) + '</div>';
-
     return (
       '<div class="coach-tab" data-coach="' + escapeHtml(coach) + '">' +
         '<div class="coach-header">' +
@@ -216,22 +193,15 @@
     );
   }
 
-  /**
-   * render(allMetrics, meetingDate, activeCoach, options)
-   *   options.loading: true → skeleton tiles. allMetrics may be null.
-   */
   function render(allMetrics, meetingDate, activeCoach, options) {
     var main = document.getElementById("main");
     if (!main) return;
-
     var loading = !!(options && options.loading);
     var weekKey = getWeekKey(meetingDate);
     var coachContent = renderCoachTab(activeCoach, allMetrics, weekKey, loading);
-
     main.innerHTML =
       '<div id="week-nav-container"></div>' +
       '<div id="coach-content">' + coachContent + '</div>';
-
     if (!loading) {
       wireControls(allMetrics, meetingDate);
       wireBreakdownClicks();
@@ -241,10 +211,6 @@
     }
   }
 
-  /**
-   * renderCoachContent(allMetrics, coach, meetingDate, options)
-   *   options.loading: true → skeleton tiles.
-   */
   function renderCoachContent(allMetrics, coach, meetingDate, options) {
     var container = document.getElementById("coach-content");
     if (!container) return;
@@ -266,7 +232,6 @@
     var groups = document.querySelectorAll(".tile-controls");
     groups.forEach(function (group) {
       group.addEventListener("click", function (e) { e.stopPropagation(); });
-
       var control = group.getAttribute("data-control");
       var coach   = group.getAttribute("data-coach");
       var week    = group.getAttribute("data-week");
@@ -306,16 +271,35 @@
     });
   }
 
+  /* ---------- In-place DOM patch helpers ---------- */
+
+  function setTileColor(metricKey, color) {
+    var tile = document.querySelector('.tile[data-metric="' + metricKey + '"]');
+    if (!tile) return;
+    tile.className = tile.className.replace(/\btile-(green|yellow|red|neutral)\b/g, "").trim();
+    tile.classList.add("tile-" + (color || "neutral"));
+  }
+
+  function patchCATile(displayString, subDisplay, color) {
+    var tile = document.querySelector('.tile[data-metric="CA"]');
+    if (!tile) return;
+    var valEl = tile.querySelector(".tile-value");
+    var subEl = tile.querySelector(".tile-sub");
+    if (valEl) valEl.textContent = displayString || "—";
+    if (subEl) subEl.textContent = subDisplay || "";
+    setTileColor("CA", color);
+  }
+
+  /* ---------- Control click handler ---------- */
+
   function handleControlClick(control, coach, week, value, allMetrics, meetingDate, btnEl) {
     var fields = {};
 
     if (control === "cb") {
       if (value === "Vacation") {
-        // Mark vacation — clear CB value, set vacation flag.
         fields.cb       = "";
         fields.vacation = "Yes";
       } else {
-        // Yes or No — set CB value, clear vacation flag.
         fields.cb       = value;
         fields.vacation = "";
       }
@@ -346,20 +330,32 @@
           b.classList.remove("ctrl-saving");
         });
 
-        // Update in-memory metrics to reflect the new state.
+        // Patch DOM in-place — no full re-render to avoid duplicate sheet rows.
         if (allMetrics[coach]) {
           var isVacation = (value === "Vacation");
 
           if (control === "cb") {
-            allMetrics[coach].CB.value        = isVacation ? null : value;
+            allMetrics[coach].CB.value         = isVacation ? null : value;
             allMetrics[coach].CB.displayString = isVacation ? "—" : value;
             allMetrics[coach].CB.subDisplay    = isVacation ? "On vacation" : "";
-            allMetrics[coach].CB.color         = isVacation ? "neutral"
-              : (value === "Yes" ? "green" : "red");
+            allMetrics[coach].CB.color         = isVacation ? "neutral" : (value === "Yes" ? "green" : "red");
             if (!allMetrics[coach].CB.breakdown) allMetrics[coach].CB.breakdown = {};
             allMetrics[coach].CB.breakdown.vacation = isVacation;
 
-            // Sync CA to match vacation state.
+            // Update tile border color.
+            setTileColor("CB", allMetrics[coach].CB.color);
+
+            // Update current value display.
+            var currentEl = group.parentNode && group.parentNode.querySelector(".tile-current");
+            if (currentEl) currentEl.textContent = isVacation ? "—" : value;
+
+            // Toggle disabled on Yes/No.
+            Array.prototype.forEach.call(group.querySelectorAll(".ctrl-btn"), function (b) {
+              var v = b.getAttribute("data-value");
+              if (v === "Yes" || v === "No") b.disabled = isVacation;
+            });
+
+            // Sync CA tile.
             if (isVacation) {
               allMetrics[coach].CA.value         = null;
               allMetrics[coach].CA.displayString = "—";
@@ -367,30 +363,23 @@
               allMetrics[coach].CA.color         = "neutral";
               if (!allMetrics[coach].CA.breakdown) allMetrics[coach].CA.breakdown = {};
               allMetrics[coach].CA.breakdown.vacation = true;
+              patchCATile("—", "On vacation", "neutral");
             } else {
-              // CA will correct itself on next full data reload; for now just
-              // clear the vacation flag so it re-evaluates correctly.
-              if (allMetrics[coach].CA.breakdown) {
-                allMetrics[coach].CA.breakdown.vacation = false;
-              }
+              if (allMetrics[coach].CA.breakdown) allMetrics[coach].CA.breakdown.vacation = false;
             }
           }
 
           if (control === "cc") {
-            allMetrics[coach].CC.value        = value;
+            allMetrics[coach].CC.value         = value;
             allMetrics[coach].CC.displayString = value;
-            allMetrics[coach].CC.color        =
-              (value === "Done")    ? "green"  :
-              (value === "Pending") ? "yellow" :
-              (value === "Missed")  ? "red"    : "neutral";
+            allMetrics[coach].CC.color         =
+              value === "Done"    ? "green"  :
+              value === "Pending" ? "yellow" :
+              value === "Missed"  ? "red"    : "neutral";
+            setTileColor("CC", allMetrics[coach].CC.color);
+            var ccCurrent = group.parentNode && group.parentNode.querySelector(".tile-current");
+            if (ccCurrent) ccCurrent.textContent = value;
           }
-        }
-
-        // Re-render the coach content so tiles reflect the updated state
-        // immediately without requiring a tab switch.
-        if (root.CoachPulseApp && root.CoachPulseApp.getActiveCoach &&
-            root.CoachPulseApp.getActiveCoach() === coach) {
-          renderCoachContent(allMetrics, coach, meetingDate);
         }
 
         if (root.WeekCache && root.WeekCache.invalidate) {
