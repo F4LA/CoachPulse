@@ -5,6 +5,10 @@
  * 14-day forward window starts on the Thursday AFTER meetingDate (the
  * day after the closed coaching week). weekKey is the Wed itself, not
  * meetingDate - 1.
+ *
+ * Phase 4B.3 fix: clients with refund=true (col Y) are excluded from the
+ * window, consistent with S4 (Renewals Last Week) and the Slack Renewal
+ * Radar automation.
  */
 (function (root) {
   "use strict";
@@ -76,6 +80,7 @@
     for (var j = 0; j < data.masterSheet.length; j++) {
       var r = data.masterSheet[j];
       if (!out[r.coach]) continue;
+      if (r.refund) continue;  // refunded clients excluded — consistent with S4 and Slack Radar
       var end = helpers.parseDateLoose(r.newEndDate);
       if (!end) continue;
       if (end < window.start || end > window.end) continue;
