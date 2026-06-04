@@ -194,7 +194,7 @@
               ' data-coach="' + escapeHtml(coach) + '"' +
               ' data-week="' + escapeHtml(weekKey) + '"' +
               ' data-client="' + escapeHtml(client) + '">' +
-              'Marcar late check-in' +
+              'Mark late check-in' +
             '</button></td>';
         return (
           '<tr>' +
@@ -348,7 +348,7 @@
     if (!root.ManualInputs || typeof root.ManualInputs.setLateCheckin !== "function") return;
 
     btn.disabled = true;
-    btn.textContent = "Guardando…";
+    btn.textContent = "Saving…";
 
     root.ManualInputs.setLateCheckin(week, coach, client)
       .then(function () {
@@ -371,7 +371,7 @@
           root.console.error("[CoachPulse] late check-in write failed:", err);
         }
         btn.disabled = false;
-        btn.textContent = "Reintentar";
+        btn.textContent = "Retry";
       });
   }
 
