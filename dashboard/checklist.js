@@ -58,7 +58,7 @@
 
   /* ---------- CA: Form Submission Rate ---------- */
 
-  function buildCA(coach, formResponses, clientToCoach, rosterCount, window, isVacation) {
+  function buildCA(coach, formResponses, clientToCoach, activeClients, window, isVacation, lateClients) {
     // Vacation override — coach not working this week, metric does not apply.
     if (isVacation) {
       return {
@@ -66,9 +66,16 @@
         displayString: "—",
         subDisplay: "On vacation",
         color: "neutral",
-        breakdown: { submittedClientNames: [], nonSubmitters: [], vacation: true }
+        breakdown: { submittedClientNames: [], nonSubmitters: [], lateCredited: [], vacation: true }
       };
     }
+
+    var rosterCount = activeClients.length;
+
+    // Set of this coach's active clients — late credit only applies to them,
+    // so the numerator can never exceed the denominator.
+    var activeSet = {};
+    for (var a = 0; a < activeClients.length; a++) activeSet[activeClients[a]] = true;
 
     var submitted = {};
 
@@ -85,6 +92,20 @@
       submitted[client] = ts;
     }
 
+    // Late check-in credit: a client manually marked as "late check-in" for
+    // this week/coach counts as submitted for CA only — even though no form
+    // response exists in-window. Restricted to active clients not already
+    // submitted, so it strictly closes the gap toward 100%.
+    var lateCredited = [];
+    var late = lateClients || [];
+    for (var L = 0; L < late.length; L++) {
+      var lateName = late[L];
+      if (!activeSet[lateName]) continue;
+      if (submitted[lateName]) continue;
+      submitted[lateName] = true;
+      lateCredited.push(lateName);
+    }
+
     var submittedCount = Object.keys(submitted).length;
     var percent = helpers.pct(submittedCount, rosterCount);
 
@@ -97,7 +118,8 @@
         : helpers.colorForPercentHigherBetter(percent, CFG.THRESHOLDS.formSub),
       breakdown: {
         submittedClientNames: Object.keys(submitted),
-        nonSubmitters: []
+        nonSubmitters: [],
+        lateCredited: lateCredited
       }
     };
   }
@@ -110,6 +132,22 @@
       if (r.weekEndingWed === weekKey && r.coach === coach) return r;
     }
     return null;
+  }
+
+  /**
+   * Client names with a late check-in recorded for this exact week/coach.
+   * weekKey match is the same exact-string compare used by findManualEntry.
+   */
+  function lateCheckinsFor(lateCheckins, weekKey, coach) {
+    var out = [];
+    if (!lateCheckins) return out;
+    for (var i = 0; i < lateCheckins.length; i++) {
+      var r = lateCheckins[i];
+      if (r.weekEndingWed === weekKey && r.coach === coach && r.client) {
+        out.push(r.client);
+      }
+    }
+    return out;
   }
 
   function buildCB(entry, isVacation) {
@@ -259,8 +297,9 @@
       var c = CFG.COACHES[k];
       var manualEntry = findManualEntry(data.manualCB_CC, weekKey, c);
       var vacation    = isCoachOnVacation(manualEntry);
+      var lateClients = lateCheckinsFor(data.lateCheckins, weekKey, c);
 
-      var ca = buildCA(c, data.formResponses, clientToCoach, clientsByCoach[c].length, window, vacation);
+      var ca = buildCA(c, data.formResponses, clientToCoach, clientsByCoach[c], window, vacation, lateClients);
       fillNonSubmitters(ca, clientsByCoach[c], data.formResponses);
 
       out[c] = {

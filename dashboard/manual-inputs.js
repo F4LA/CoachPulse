@@ -71,8 +71,27 @@
     });
   }
 
+  /**
+   * Mark a single client as having submitted a LATE check-in for a given week.
+   * Appends one row to the LateCheckins tab. The presence of the row credits
+   * ONLY the Form Submission Rate (CA) for that client/week — it does not touch
+   * standards, pathways, or the FlagSystem engine.
+   *
+   * @param {string} weekEndingWed — "YYYY-MM-DD" of the closing Wednesday
+   * @param {string} coach
+   * @param {string} clientName
+   */
+  function setLateCheckin(weekEndingWed, coach, clientName) {
+    return post("setLateCheckin", {
+      weekEndingWed: weekEndingWed,
+      coach:         coach,
+      clientName:    clientName
+    });
+  }
+
   root.ManualInputs = {
-    setCB_CC:    setCB_CC,
-    setCDStatus: setCDStatus
+    setCB_CC:       setCB_CC,
+    setCDStatus:    setCDStatus,
+    setLateCheckin: setLateCheckin
   };
 })(typeof window !== "undefined" ? window : this);

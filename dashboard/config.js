@@ -12,8 +12,9 @@
       HC_ACTIONS:     { id: "1TmlmzNPi-BtLy1C4sizqJmvLFHAxyH6Glb9mWP3Vv64", tab: "HC Actions" },
       MASTER_SHEET:   { id: "1ctM6K8hQfh73bi7f-MtXkqW3BaPxU73NZf8xPJQUEOc", tab: "Client Mastersheet" },
       MANUAL_INPUTS:  { id: "1jHCwgiOy2MAvaPYtYDkErag3kdCy4jXIAN7sTqhX9BQ", tabs: {
-        CB_CC:     "CB_CC_Inputs",
-        CD_STATUS: "CD_Statuses"
+        CB_CC:        "CB_CC_Inputs",
+        CD_STATUS:    "CD_Statuses",
+        LATE_CHECKINS: "LateCheckins"
       }}
     },
 

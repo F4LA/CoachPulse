@@ -28,11 +28,47 @@
     return CFG.COACHES.indexOf(coachName) !== -1;
   }
 
+  /**
+   * Thu-Wed coaching week window for a given evaluation moment.
+   * Mirrors Checklist.helpers.getCoachingWeekWindow exactly. Inlined here
+   * (rather than referenced) because state-builder.js loads before
+   * checklist.js in index.html — this avoids any load-order coupling.
+   *   weekEnd   = currentDate (forced to 23:59:59.999)
+   *   weekStart = weekEnd - 6 days (forced to 00:00:00.000) — the Thu
+   */
+  function getCoachingWeekWindow(currentDate) {
+    var weekEnd = new Date(currentDate.getTime());
+    weekEnd.setHours(23, 59, 59, 999);
+    var weekStart = new Date(weekEnd.getTime() - 6 * 24 * 60 * 60 * 1000);
+    weekStart.setHours(0, 0, 0, 0);
+    return { start: weekStart, end: weekEnd };
+  }
+
+  /**
+   * 1B rule — exclude a client from ALL metrics during their first coaching
+   * week. A client is "in their first week" for the week being evaluated when
+   * their contractStart date falls inside the Thu-Wed window of `currentDate`.
+   * From the following week onward they evaluate normally.
+   *
+   * parseDateLoose is referenced lazily (Scorecard loads after this module).
+   */
+  function isFirstCoachingWeek(contractStart, currentDate) {
+    if (!contractStart) return false;
+    var helpers = root.Scorecard && root.Scorecard.helpers;
+    if (!helpers || !helpers.parseDateLoose) return false;
+    var start = helpers.parseDateLoose(contractStart);
+    if (!start) return false;
+    var win = getCoachingWeekWindow(currentDate);
+    return start >= win.start && start <= win.end;
+  }
+
   function buildOneRun(roster, formResponses, hcActions, currentDate) {
     var states = [];
     for (var i = 0; i < roster.length; i++) {
       var entry = roster[i];
       if (!isValidCoach(entry.coach)) continue;
+      // 1B: client in their first coaching week is excluded from every metric.
+      if (isFirstCoachingWeek(entry.contractStart, currentDate)) continue;
       try {
         var state = root.PathwayEngine.calculateClientState(
           entry.client,

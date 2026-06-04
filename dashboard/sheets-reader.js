@@ -58,6 +58,21 @@
   }
 
   /**
+   * Like fetchSheet but never rejects: if the tab is missing or the request
+   * fails, it resolves to []. Used for tabs that may not exist yet (e.g.
+   * LateCheckins before its first write / before the manual tab creation),
+   * so a missing tab can't break the whole dashboard load.
+   */
+  function fetchSheetOptional(sheetId, tab, range) {
+    return fetchSheet(sheetId, tab, range).catch(function (err) {
+      if (root.console && root.console.warn) {
+        root.console.warn("[sheets-reader] optional tab unavailable [" + tab + "]: " + err.message);
+      }
+      return [];
+    });
+  }
+
+  /**
    * Interpret a cell value as a boolean for refund/vacation/checkbox columns.
    * Sheets API returns checkbox columns as the string "TRUE" / "FALSE",
    * or as boolean true/false depending on the value's type. Empty cells
@@ -142,6 +157,35 @@
     return out;
   }
 
+  /**
+   * LateCheckins column layout (0-indexed):
+   *   0: Week_Ending_Wed   ("YYYY-MM-DD" string of the closing Wednesday)
+   *   1: Coach
+   *   2: Client
+   *   3: Last_Updated
+   *
+   * The mere presence of a row means "this client had a late check-in that
+   * week" — it credits ONLY the Form Submission Rate (CA). weekEndingWed is
+   * trimmed exactly like the other parsers of this sheet; matching is done by
+   * exact string compare against ymdET(window.end), and the Apps Script
+   * handler writes the date as the same YYYY-MM-DD string the POST sends.
+   */
+  function parseLateCheckins(rows) {
+    if (!rows.length) return [];
+    var out = [];
+    for (var i = 1; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r || !r[0]) continue;
+      out.push({
+        weekEndingWed: (r[0] || "").trim(),
+        coach:         (r[1] || "").trim(),
+        client:        (r[2] || "").trim(),
+        lastUpdated:   r[3] || ""
+      });
+    }
+    return out;
+  }
+
   function parseManualCD(rows) {
     if (!rows.length) return [];
     var out = [];
@@ -170,7 +214,8 @@
       fetchSheet(S.HC_ACTIONS.id,     S.HC_ACTIONS.tab),
       fetchSheet(S.MASTER_SHEET.id,   S.MASTER_SHEET.tab),
       fetchSheet(S.MANUAL_INPUTS.id,  S.MANUAL_INPUTS.tabs.CB_CC),
-      fetchSheet(S.MANUAL_INPUTS.id,  S.MANUAL_INPUTS.tabs.CD_STATUS)
+      fetchSheet(S.MANUAL_INPUTS.id,  S.MANUAL_INPUTS.tabs.CD_STATUS),
+      fetchSheetOptional(S.MANUAL_INPUTS.id, S.MANUAL_INPUTS.tabs.LATE_CHECKINS)
     ]).then(function (results) {
       return {
         roster:        parseRoster(results[0]),
@@ -178,7 +223,8 @@
         hcActions:     results[2],
         masterSheet:   parseMasterSheet(results[3]),
         manualCB_CC:   parseManualCB_CC(results[4]),
-        manualCD:      parseManualCD(results[5])
+        manualCD:      parseManualCD(results[5]),
+        lateCheckins:  parseLateCheckins(results[6])
       };
     });
   }

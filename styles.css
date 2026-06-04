@@ -826,6 +826,29 @@ button { font-family: inherit; }
   letter-spacing: 0.02em;
 }
 
+/* Late check-in action (CA breakdown — HC only) */
+.bp-late-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 120ms ease;
+}
+.bp-late-btn:hover:not(:disabled) {
+  border-color: var(--steel-400);
+  color: var(--steel-700);
+  background: var(--steel-tint);
+}
+.bp-late-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Mobile: panel takes full width */
 @media (max-width: 540px) {
   .bp-panel {

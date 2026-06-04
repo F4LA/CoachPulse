@@ -42,8 +42,13 @@
     document.body.appendChild(root_);
 
     root_.addEventListener("click", function (e) {
-      if (e.target && e.target.getAttribute && e.target.getAttribute("data-bp-close") === "true") {
+      var t = e.target;
+      if (t && t.getAttribute && t.getAttribute("data-bp-close") === "true") {
         close();
+        return;
+      }
+      if (t && t.getAttribute && t.getAttribute("data-late-checkin") === "true") {
+        handleLateCheckinClick(t);
       }
     });
     document.addEventListener("keydown", function (e) {
@@ -148,19 +153,78 @@
     return html;
   }
 
-  function renderCA(metric) {
+  function weekKeyOf(meetingDate) {
+    if (!meetingDate) return "";
+    var y = meetingDate.getFullYear();
+    var m = String(meetingDate.getMonth() + 1).padStart(2, "0");
+    var d = String(meetingDate.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+
+  function currentWeekKey() {
+    var md = root.CoachPulseApp && typeof root.CoachPulseApp.getCurrentMeetingDate === "function"
+      ? root.CoachPulseApp.getCurrentMeetingDate()
+      : null;
+    return weekKeyOf(md);
+  }
+
+  function renderCA(metric, coach) {
     var bd = metric.breakdown || {};
     var nonSubs = bd.nonSubmitters || [];
-    var cols = [
-      { label: "Client",          get: function (r) { return r.client; } },
-      { label: "Last Submission", get: function (r) { return r.lastSubmission; } }
-    ];
-    var html = listSection(
-      "Did not submit this week",
-      nonSubs,
-      cols,
-      "All active clients submitted this week."
-    );
+    var lateCredited = bd.lateCredited || [];
+    var readOnly = !!root.CoachPulseReadOnly;
+    var weekKey = currentWeekKey();
+
+    var html = "";
+
+    // Non-submitters table, each with a "late check-in" action (HC only).
+    if (!nonSubs.length) {
+      html +=
+        '<h3 class="bp-section-title">Did not submit this week</h3>' +
+        '<div class="bp-empty">All active clients submitted this week.</div>';
+    } else {
+      var head =
+        '<th>Client</th><th>Last Submission</th>' + (readOnly ? '' : '<th></th>');
+      var body = nonSubs.map(function (r) {
+        var client = r.client;
+        var actionCell = readOnly
+          ? ''
+          : '<td>' +
+              '<button class="bp-late-btn" data-late-checkin="true"' +
+              ' data-coach="' + escapeHtml(coach) + '"' +
+              ' data-week="' + escapeHtml(weekKey) + '"' +
+              ' data-client="' + escapeHtml(client) + '">' +
+              'Marcar late check-in' +
+            '</button></td>';
+        return (
+          '<tr>' +
+            '<td>' + escapeHtml(client) + '</td>' +
+            '<td>' + escapeHtml(r.lastSubmission == null || r.lastSubmission === "" ? "—" : r.lastSubmission) + '</td>' +
+            actionCell +
+          '</tr>'
+        );
+      }).join("");
+      html +=
+        '<h3 class="bp-section-title">Did not submit this week</h3>' +
+        '<table class="bp-table">' +
+          '<thead><tr>' + head + '</tr></thead>' +
+          '<tbody>' + body + '</tbody>' +
+        '</table>';
+    }
+
+    // Informational: clients credited via a late check-in this week.
+    if (lateCredited.length) {
+      var lateRows = lateCredited.map(function (name) {
+        return '<tr><td>' + escapeHtml(name) + '</td><td>Late check-in</td></tr>';
+      }).join("");
+      html +=
+        '<h3 class="bp-section-title">Credited via late check-in</h3>' +
+        '<table class="bp-table">' +
+          '<thead><tr><th>Client</th><th>Credit</th></tr></thead>' +
+          '<tbody>' + lateRows + '</tbody>' +
+        '</table>';
+    }
+
     if (metric.subDisplay) html += footerLine(metric.subDisplay + " submitted");
     return html;
   }
@@ -221,8 +285,94 @@
     }
     var renderer = METRIC_RENDERERS[metricKey];
     if (!renderer) return;
-    var bodyHtml = renderer(coachMetrics[metricKey]);
+    var bodyHtml = renderer(coachMetrics[metricKey], coach);
     open(meta.title + " — " + coach, bodyHtml);
+  }
+
+  /* ---------- Late check-in (CA only) ---------- */
+
+  /**
+   * Recompute CA in-place after crediting `client` with a late check-in:
+   * move them out of nonSubmitters, into submittedClientNames + lateCredited,
+   * and recompute percent / color / display / sub. rosterCount is preserved
+   * because it equals submitted + nonSubmitters at all times.
+   */
+  function applyLateCheckinOptimistic(coach, client) {
+    var metrics = getCurrentMetrics();
+    var ca = metrics && metrics[coach] && metrics[coach].CA;
+    if (!ca || !ca.breakdown) return null;
+    var bd = ca.breakdown;
+    bd.nonSubmitters = (bd.nonSubmitters || []).filter(function (r) {
+      return r.client !== client;
+    });
+    bd.submittedClientNames = bd.submittedClientNames || [];
+    if (bd.submittedClientNames.indexOf(client) === -1) bd.submittedClientNames.push(client);
+    bd.lateCredited = bd.lateCredited || [];
+    if (bd.lateCredited.indexOf(client) === -1) bd.lateCredited.push(client);
+
+    var submittedCount = bd.submittedClientNames.length;
+    var rosterCount = submittedCount + bd.nonSubmitters.length;
+    var H = root.Scorecard && root.Scorecard.helpers;
+    if (H && rosterCount > 0) {
+      var percent = H.pct(submittedCount, rosterCount);
+      ca.value = percent;
+      ca.displayString = H.fmtPct(percent);
+      ca.color = H.colorForPercentHigherBetter(percent, CFG.THRESHOLDS.formSub);
+    }
+    ca.subDisplay = submittedCount + " of " + rosterCount;
+    return ca;
+  }
+
+  /**
+   * Patch the live CA tile (active coach) so the dashboard reflects the new
+   * percentage immediately, without a full re-render.
+   */
+  function patchCATile(ca) {
+    if (!ca) return;
+    var tile = document.querySelector('.tile[data-metric="CA"]');
+    if (!tile) return;
+    var valEl = tile.querySelector(".tile-value");
+    var subEl = tile.querySelector(".tile-sub");
+    if (valEl) valEl.textContent = ca.displayString || "—";
+    if (subEl) subEl.textContent = ca.subDisplay || "";
+    tile.className = tile.className.replace(/\btile-(green|yellow|red|neutral)\b/g, "").trim();
+    tile.classList.add("tile-" + (ca.color || "neutral"));
+  }
+
+  function handleLateCheckinClick(btn) {
+    if (root.CoachPulseReadOnly) return;
+    var coach  = btn.getAttribute("data-coach");
+    var week   = btn.getAttribute("data-week");
+    var client = btn.getAttribute("data-client");
+    if (!coach || !week || !client) return;
+    if (!root.ManualInputs || typeof root.ManualInputs.setLateCheckin !== "function") return;
+
+    btn.disabled = true;
+    btn.textContent = "Guardando…";
+
+    root.ManualInputs.setLateCheckin(week, coach, client)
+      .then(function () {
+        var ca = applyLateCheckinOptimistic(coach, client);
+        patchCATile(ca);
+
+        // Invalidate the cached week so a later reload recomputes from sheet.
+        var md = root.CoachPulseApp && typeof root.CoachPulseApp.getCurrentMeetingDate === "function"
+          ? root.CoachPulseApp.getCurrentMeetingDate()
+          : null;
+        if (md && root.WeekCache && root.WeekCache.invalidate) {
+          root.WeekCache.invalidate(md);
+        }
+
+        // Re-render the panel body to reflect the moved client.
+        show("CA", coach);
+      })
+      .catch(function (err) {
+        if (root.console && root.console.error) {
+          root.console.error("[CoachPulse] late check-in write failed:", err);
+        }
+        btn.disabled = false;
+        btn.textContent = "Reintentar";
+      });
   }
 
   function isClickable(metricKey) {
