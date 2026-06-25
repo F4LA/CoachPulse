@@ -19,14 +19,26 @@
   if (!helpers) throw new Error("renewal-radar: Scorecard helpers not loaded");
 
   /**
-   * meetingDate is Wed 23:59:59.999. Renewals Next 2 Weeks looks forward
-   * starting Thursday (the day after meetingDate) for 14 days.
+   * meetingDate is Wed 23:59:59.999 (ET-anchored). Renewals Next 2 Weeks
+   * looks forward starting Thursday (the day after meetingDate) for 14 days.
+   *
+   * Timezone-safe: the window is built from meetingDate's calendar Y/M/D via
+   * the local Date constructor, NOT from `meetingDate + 1ms` + setHours().
+   * The old idiom assumed meetingDate sat at *local* 23:59:59.999, which is
+   * only true in ET. For a browser west of ET (Central/Mountain/Pacific) the
+   * instant reads as the prior evening, so `+1ms` never crossed into Thursday
+   * and the whole 14-day window shifted back a day — silently dropping the
+   * 14th day (e.g. a client ending exactly two weeks out). Calendar-day math
+   * matches parseDateLoose (which yields local-midnight dates) on every tz.
    */
   function getWindow(meetingDate) {
-    // Thursday after meetingDate, 00:00:00.
-    var start = new Date(meetingDate.getTime() + 1);
-    start.setHours(0, 0, 0, 0);
-    var end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000 - 1);
+    var y = meetingDate.getFullYear();
+    var mo = meetingDate.getMonth();
+    var d = meetingDate.getDate();
+    // Thursday after meetingDate at 00:00:00.000 (day rollover handled by Date).
+    var start = new Date(y, mo, d + 1, 0, 0, 0, 0);
+    // 14th day inclusive, at 23:59:59.999.
+    var end = new Date(y, mo, d + 14, 23, 59, 59, 999);
     return { start: start, end: end };
   }
 
