@@ -69,31 +69,101 @@
 
   /* ---------- Pathway extraction ---------- */
 
+  // Red-transition threshold per pathway: the streak length at which the
+  // coach asks for the call (P1 = 3, P2 = 4, P3 = 5 consecutive evaluable
+  // weeks). Used to show how many weeks remain before the call is due.
+  var RED_THRESHOLD = { p1: 3, p2: 4, p3: 5 };
+
+  // Engine standard names -> short HC-facing display names. Short-name
+  // mapping is a presentation concern (the engine keeps full names).
+  var STANDARD_SHORT = {
+    "Check-In Submission": "Check-in",
+    "Training Adherence":  "Training",
+    "Nutrition Adherence": "Nutrition",
+    "Movement Target":     "Movement",
+    "Technique Feedback":  "Technique"
+  };
+
+  var CHECKIN_STD = "Check-In Submission";
+
+  function shortStandard(name) {
+    return STANDARD_SHORT[name] || name || "";
+  }
+
+  // P1 cause label, derived from the failed standards of the most recent
+  // streak week (falls back to streakWeeks if templateData is absent):
+  //   check-in only              -> "Acute Crisis · Missed Check-in"
+  //   check-in + other(s)        -> "Acute Crisis · Check-in + Misses"
+  //   no check-in (5+ via others)-> "Acute Crisis · Multiple Misses"
+  function p1CauseLabel(p1) {
+    var recent =
+      (p1 && p1.templateData && p1.templateData.standards_list_recent) ||
+      (p1 && p1.streakWeeks && p1.streakWeeks.length
+        ? p1.streakWeeks[p1.streakWeeks.length - 1].failedStandards
+        : null) ||
+      [];
+    var hasCheckin = recent.indexOf(CHECKIN_STD) !== -1;
+    if (hasCheckin && recent.length === 1) return "Acute Crisis · Missed Check-in";
+    if (hasCheckin) return "Acute Crisis · Check-in + Misses";
+    return "Acute Crisis · Multiple Misses";
+  }
+
+  // Pick the P2 entry with the longest current streak. That streak defines
+  // both the standard we name and the week number we surface.
+  function dominantP2(arr) {
+    if (!arr || !arr.length) return null;
+    var best = null;
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      var sl = (e && e.streakLength) || 0;
+      if (!best || sl > best.streakLength) {
+        best = { standard: e.standard, streakLength: sl };
+      }
+    }
+    return best;
+  }
+
+  // Pathway Week label:
+  //   Red client              -> "Week N · call requested" (call already asked)
+  //   Yellow, weeks remaining -> "Week N · X to call"
+  //   Yellow, at/over threshold -> "Week N · call due"
+  function pathwayWeekLabel(key, week, color) {
+    if (week == null || week <= 0) return "—";
+    if (color === "Red") return "Week " + week + " · call requested";
+    var threshold = RED_THRESHOLD[key] || 0;
+    var toCall = threshold - week;
+    if (toCall > 0) return "Week " + week + " · " + toCall + " to call";
+    return "Week " + week + " · call due";
+  }
+
   function pathwayInfo(state) {
     if (!state) return { activePathway: "—", pathwayWeek: "—" };
     var dom = state.dominantPathway;
     if (!dom) return { activePathway: "—", pathwayWeek: "—" };
     var key = String(dom).toLowerCase();
     var ps = state.pathwayStates || {};
+    var color = state.color;
 
+    var label = "—";
     var week = null;
-    if (key === "p2") {
-      var arr = ps.p2 || [];
-      var maxLen = 0;
-      for (var i = 0; i < arr.length; i++) {
-        var sl = (arr[i] && arr[i].streakLength) || 0;
-        if (sl > maxLen) maxLen = sl;
-      }
-      week = maxLen > 0 ? maxLen : null;
-    } else if (key === "p1") {
+
+    if (key === "p1") {
+      label = p1CauseLabel(ps.p1);
       week = (ps.p1 && ps.p1.streakLength) || null;
+    } else if (key === "p2") {
+      var d = dominantP2(ps.p2);
+      if (d) {
+        label = "Repeated " + shortStandard(d.standard);
+        week = d.streakLength > 0 ? d.streakLength : null;
+      }
     } else if (key === "p3") {
+      label = "Persistent Inconsistency";
       week = (ps.p3 && ps.p3.streakLength) || null;
     }
 
     return {
-      activePathway: String(dom).toUpperCase(),
-      pathwayWeek:   week != null && week > 0 ? "Week " + week : "—"
+      activePathway: label,
+      pathwayWeek:   pathwayWeekLabel(key, week, color)
     };
   }
 
