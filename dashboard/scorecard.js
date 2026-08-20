@@ -150,7 +150,8 @@
     if (key === "p1") {
       label = p1CauseLabel(ps.p1);
       week = (ps.p1 && ps.p1.streakLength) || null;
-    } else if (key === "p2") {
+    } else if (key === "p2" || key.indexOf("p2:") === 0) {
+      key = "p2"; // dominantPathway arrives as "P2:<standard>"; normalize for threshold lookup
       var d = dominantP2(ps.p2);
       if (d) {
         label = "Repeated " + shortStandard(d.standard);
