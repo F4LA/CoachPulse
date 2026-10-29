@@ -53,8 +53,11 @@
 
     /* ---------- CD status taxonomy ---------- */
     CD_STATUSES: {
-      GREEN: ["Renewed", "Did Not Renew - Call Done", "Call Scheduled"],
-      RED:   ["No Decision - No Call Scheduled", "Did Not Renew - No Call Scheduled"]
+      GREEN:  ["Renewed", "Did Not Renew - Call Done", "Call Scheduled", "MIA"],
+      YELLOW: ["Pending Decision - Call Done"],
+      // "Did Not Renew - No Call Scheduled" was retired from the sheet dropdown
+      // (Oct 2026). It stays here ONLY so historical rows keep classifying as red.
+      RED:    ["No Decision - No Call Scheduled", "Did Not Renew - No Call Scheduled"]
     },
 
     /* ---------- Metric metadata ---------- */
@@ -104,7 +107,7 @@
       CD: {
         title:       "Renewals Next 2 Weeks",
         description: "Clients with contract ending in the next 14 days",
-        legend:      "Green = all on track  ·  Red = any at risk  ·  Gray = pending status",
+        legend:      "Green = all on track  ·  Yellow = decision pending  ·  Red = any at risk  ·  Gray = pending status",
         section:     "behaviors"
       }
     },
