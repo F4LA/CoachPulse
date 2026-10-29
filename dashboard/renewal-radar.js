@@ -45,21 +45,27 @@
   function classifyStatus(status) {
     if (!status) return "unset";
     var s = String(status).trim();
-    if (CFG.CD_STATUSES.GREEN.indexOf(s) !== -1) return "green";
-    if (CFG.CD_STATUSES.RED.indexOf(s) !== -1)   return "red";
+    if (CFG.CD_STATUSES.GREEN.indexOf(s) !== -1)  return "green";
+    if (CFG.CD_STATUSES.YELLOW.indexOf(s) !== -1) return "yellow";
+    if (CFG.CD_STATUSES.RED.indexOf(s) !== -1)    return "red";
     return "unset";
   }
 
   function deriveCoachColor(clientList) {
     if (clientList.length === 0) return "neutral";
-    var hasUnset = false, hasRed = false;
+    // Priority: red > gray (any unset) > yellow > green.
+    // Gray outranks yellow on purpose: an unset client could still turn out red,
+    // so the tile cannot claim "pending decision" until every client is captured.
+    var hasUnset = false, hasRed = false, hasYellow = false;
     for (var i = 0; i < clientList.length; i++) {
       var k = classifyStatus(clientList[i].status);
       if (k === "red") hasRed = true;
       else if (k === "unset") hasUnset = true;
+      else if (k === "yellow") hasYellow = true;
     }
     if (hasRed) return "red";
     if (hasUnset) return "neutral";
+    if (hasYellow) return "yellow";
     return "green";
   }
 
